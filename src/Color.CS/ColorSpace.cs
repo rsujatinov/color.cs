@@ -218,8 +218,9 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
             Coords = new Dictionary<string, CoordMetadata>
             {
                 ["lightness"] = new() { Name = "Lightness", Range    = new CoordRange(0, 1) },
-                ["a"]         = new() { Name = "a",          Range    = new CoordRange(-0.5, 0.5) },
-                ["b"]         = new() { Name = "b",          Range    = new CoordRange(-0.5, 0.5) },
+                // CSS Color 4: percentage reference range for a and b is [-0.4, 0.4]
+                ["a"]         = new() { Name = "a",          RefRange = new CoordRange(-0.4, 0.4) },
+                ["b"]         = new() { Name = "b",          RefRange = new CoordRange(-0.4, 0.4) },
             },
             Formats = [new() { Id = "oklab", Type = "function" }],
         });

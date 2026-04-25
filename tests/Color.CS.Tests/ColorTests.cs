@@ -1097,4 +1097,618 @@ public sealed class ColorTests
     {
         Assert.Equal("lab", new Color("lab(50 0 0)").ParseMeta?.FormatId);
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Tests ported directly from color.js/test/parse.js
+    // https://github.com/color-js/color.js/blob/main/test/parse.js
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── none values ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_ParseJs_NoneHue_Lch()
+    {
+        var color = new Color("lch(90 0 none)");
+        Assert.Equal("lch",  color.Space.Id);
+        Assert.Equal(90.0,   color.Coords[0], precision: 10);
+        Assert.Equal(0.0,    color.Coords[1], precision: 10);
+        Assert.True(double.IsNaN(color.Coords[2]));
+        Assert.Equal(1.0, color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_NoneHue_Oklch()
+    {
+        var color = new Color("oklch(1 0 none)");
+        Assert.Equal("oklch", color.Space.Id);
+        Assert.Equal(1.0,     color.Coords[0], precision: 10);
+        Assert.Equal(0.0,     color.Coords[1], precision: 10);
+        Assert.True(double.IsNaN(color.Coords[2]));
+        Assert.Equal(1.0, color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_NoneHue_HslCommasSyntax()
+    {
+        // none hue with legacy comma syntax
+        var color = new Color("hsl(none, 50%, 50%)");
+        Assert.Equal("hsl", color.Space.Id);
+        Assert.True(double.IsNaN(color.Coords[0]));
+        Assert.Equal(50.0, color.Coords[1], precision: 10);
+        Assert.Equal(50.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0,  color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_NoneHue_Hwb()
+    {
+        var color = new Color("hwb(none 20% 30%)");
+        Assert.Equal("hwb", color.Space.Id);
+        Assert.True(double.IsNaN(color.Coords[0]));
+        Assert.Equal(20.0, color.Coords[1], precision: 10);
+        Assert.Equal(30.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0,  color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_NoneAlpha_Oklch()
+    {
+        var color = new Color("oklch(1 0 120 / none)");
+        Assert.Equal("oklch", color.Space.Id);
+        Assert.Equal(1.0,   color.Coords[0], precision: 10);
+        Assert.Equal(0.0,   color.Coords[1], precision: 10);
+        Assert.Equal(120.0, color.Coords[2], precision: 10);
+        Assert.True(double.IsNaN(color.Alpha));
+    }
+
+    // ── sRGB colors — specific hex values ─────────────────────────────────
+
+    [Fact]
+    public void Ported_ParseJs_Hex6_Ff0066()
+    {
+        // #ff0066 → red=1, green=0, blue=0x66/255=0.4
+        var color = new Color("#ff0066");
+        Assert.Equal("srgb", color.Space.Id);
+        Assert.Equal(1.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.4, color.Coords[2], precision: 10);
+        Assert.Equal(1.0, color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hex3_F06()
+    {
+        // #f06 expands to #ff0066
+        var color = new Color("#f06");
+        Assert.Equal("srgb", color.Space.Id);
+        Assert.Equal(1.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.4, color.Coords[2], precision: 10);
+        Assert.Equal(1.0, color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hex8_Ff006688()
+    {
+        // #ff006688 → 0x88=136 → alpha=136/255≈0.5333...
+        var color = new Color("#ff006688");
+        Assert.Equal("srgb", color.Space.Id);
+        Assert.Equal(1.0,               color.Coords[0], precision: 10);
+        Assert.Equal(0.0,               color.Coords[1], precision: 10);
+        Assert.Equal(0.4,               color.Coords[2], precision: 10);
+        Assert.Equal(136.0 / 255.0,     color.Alpha,     precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hex4_F068()
+    {
+        // #f068 expands to #ff006688
+        var color = new Color("#f068");
+        Assert.Equal(1.0,           color.Coords[0], precision: 10);
+        Assert.Equal(0.0,           color.Coords[1], precision: 10);
+        Assert.Equal(0.4,           color.Coords[2], precision: 10);
+        Assert.Equal(136.0 / 255.0, color.Alpha,     precision: 10);
+    }
+
+    [Theory]
+    [InlineData("#12")]
+    [InlineData("#12345")]
+    [InlineData("#1234567")]
+    [InlineData("#123456789")]
+    public void Ported_ParseJs_Hex_WrongCharCount_Throws(string input) =>
+        Assert.Throws<FormatException>(() => new Color(input));
+
+    // ── sRGB colors — rgb() / rgba() ──────────────────────────────────────
+
+    [Fact]
+    public void Ported_ParseJs_Rgba_PercentagesWithAlpha()
+    {
+        // rgba(0% 50% 200% / 0.5) — percentages map to [0,1], OOG allowed
+        var color = new Color("rgba(0% 50% 200% / 0.5)");
+        Assert.Equal("srgb", color.Space.Id);
+        Assert.Equal(0.0,  color.Coords[0], precision: 10);
+        Assert.Equal(0.5,  color.Coords[1], precision: 10);
+        Assert.Equal(2.0,  color.Coords[2], precision: 10);
+        Assert.Equal(0.5,  color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Rgb_NumbersWithAlpha()
+    {
+        // rgb(0 127.5 300 / .5) — numbers /255, OOG allowed
+        var color = new Color("rgb(0 127.5 300 / .5)");
+        Assert.Equal("srgb", color.Space.Id);
+        Assert.Equal(0.0,    color.Coords[0], precision: 10);
+        Assert.Equal(0.5,    color.Coords[1], precision: 10);
+        Assert.Equal(300.0 / 255.0, color.Coords[2], precision: 10);
+        Assert.Equal(0.5,   color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Rgba_CommaNumbers()
+    {
+        // rgba(0, 127.5, 300, 0.5) — legacy comma syntax
+        var color = new Color("rgba(0, 127.5, 300, 0.5)");
+        Assert.Equal("srgb", color.Space.Id);
+        Assert.Equal(0.0,    color.Coords[0], precision: 10);
+        Assert.Equal(0.5,    color.Coords[1], precision: 10);
+        Assert.Equal(300.0 / 255.0, color.Coords[2], precision: 10);
+        Assert.Equal(0.5,   color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Rgb_AngleNotAllowed_Throws()
+    {
+        // angles not allowed in rgb()
+        Assert.Throws<FormatException>(() => new Color("rgb(10deg 10 10)"));
+    }
+
+    // ── Lab and LCH colors ────────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_ParseJs_Lab_100PercentLightness()
+    {
+        // lab(100% 0 0) → L=100
+        var color = new Color("lab(100% 0 0)");
+        Assert.Equal("lab", color.Space.Id);
+        Assert.Equal(100.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0,   color.Coords[1], precision: 10);
+        Assert.Equal(0.0,   color.Coords[2], precision: 10);
+        Assert.Equal(1.0,   color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Lab_CaseInsensitive()
+    {
+        // Lab(100% 0 0) — function name case insensitive
+        var color = new Color("Lab(100% 0 0)");
+        Assert.Equal("lab", color.Space.Id);
+        Assert.Equal(100.0, color.Coords[0], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Lab_NoPercent()
+    {
+        // lab(80 0 0)
+        var color = new Color("lab(80 0 0)");
+        Assert.Equal(80.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0,  color.Coords[1], precision: 10);
+        Assert.Equal(0.0,  color.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Lab_NegativeAB()
+    {
+        // lab(100 -50 50)
+        var color = new Color("lab(100 -50 50)");
+        Assert.Equal(100.0, color.Coords[0], precision: 10);
+        Assert.Equal(-50.0, color.Coords[1], precision: 10);
+        Assert.Equal(50.0,  color.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Lab_AllPercentagesWithAlpha()
+    {
+        // lab(50% 25% -25% / 50%): L=50, a=31.25, b=-31.25, alpha=0.5
+        var color = new Color("lab(50% 25% -25% / 50%)");
+        Assert.Equal(50.0,   color.Coords[0], precision: 10);
+        Assert.Equal(31.25,  color.Coords[1], precision: 10);
+        Assert.Equal(-31.25, color.Coords[2], precision: 10);
+        Assert.Equal(0.5,    color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Lab_TransparencyDecimalAlpha()
+    {
+        // lab(100 -50 5 / .5)
+        var color = new Color("lab(100 -50 5 / .5)");
+        Assert.Equal(100.0, color.Coords[0], precision: 10);
+        Assert.Equal(-50.0, color.Coords[1], precision: 10);
+        Assert.Equal(5.0,   color.Coords[2], precision: 10);
+        Assert.Equal(0.5,   color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Lch_100PercentLightness()
+    {
+        // lch(100% 0 0) → L=100
+        var color = new Color("lch(100% 0 0)");
+        Assert.Equal("lch", color.Space.Id);
+        Assert.Equal(100.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0,   color.Coords[1], precision: 10);
+        Assert.Equal(0.0,   color.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Lch_NoPercentage()
+    {
+        // lch(100 50 50)
+        var color = new Color("lch(100 50 50)");
+        Assert.Equal(100.0, color.Coords[0], precision: 10);
+        Assert.Equal(50.0,  color.Coords[1], precision: 10);
+        Assert.Equal(50.0,  color.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Lch_PercentagesWithAlpha()
+    {
+        // lch(50% 50% 50 / 50%): L=50, C=75, H=50, alpha=0.5
+        var color = new Color("lch(50% 50% 50 / 50%)");
+        Assert.Equal(50.0, color.Coords[0], precision: 10);
+        Assert.Equal(75.0, color.Coords[1], precision: 10);
+        Assert.Equal(50.0, color.Coords[2], precision: 10);
+        Assert.Equal(0.5,  color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Lch_HueOver360()
+    {
+        // lch(100 50 450) — hue > 360, not clamped
+        var color = new Color("lch(100 50 450)");
+        Assert.Equal(100.0, color.Coords[0], precision: 10);
+        Assert.Equal(50.0,  color.Coords[1], precision: 10);
+        Assert.Equal(450.0, color.Coords[2], precision: 10);
+    }
+
+    // ── OKLab colors ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_ParseJs_Oklab_100PercentLightness()
+    {
+        // oklab(100% 0 0) → L=1.0
+        var color = new Color("oklab(100% 0 0)");
+        Assert.Equal("oklab", color.Space.Id);
+        Assert.Equal(1.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0, color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Oklab_WithAlpha()
+    {
+        // oklab(100% 0 0 / 0.5)
+        var color = new Color("oklab(100% 0 0 / 0.5)");
+        Assert.Equal(1.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.5, color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Oklab_CaseInsensitive()
+    {
+        // OKLab(100% 0 0) — function name case insensitive
+        var color = new Color("OKLab(100% 0 0)");
+        Assert.Equal("oklab", color.Space.Id);
+        Assert.Equal(1.0, color.Coords[0], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Oklab_AllPercentages()
+    {
+        // oklab(42% 100% -50%): L=0.42, a=0.4, b=-0.2
+        // (CSS spec: a/b reference range is [-0.4, 0.4], so 100%=0.4)
+        var color = new Color("oklab(42% 100% -50%)");
+        Assert.Equal(0.42, color.Coords[0], precision: 10);
+        Assert.Equal(0.4,  color.Coords[1], precision: 10);
+        Assert.Equal(-0.2, color.Coords[2], precision: 10);
+        Assert.Equal(1.0,  color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Oklab_AllNumbers()
+    {
+        // oklab(1 -0.20 0.20) — raw numbers
+        var color = new Color("oklab(1 -0.20 0.20)");
+        Assert.Equal(1.0,  color.Coords[0], precision: 10);
+        Assert.Equal(-0.2, color.Coords[1], precision: 10);
+        Assert.Equal(0.2,  color.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Oklab_OutOfRangeNumbers()
+    {
+        // oklab(10 -0.80 0.80) — OOG, accepted as-is
+        var color = new Color("oklab(10 -0.80 0.80)");
+        Assert.Equal(10.0, color.Coords[0], precision: 10);
+        Assert.Equal(-0.8, color.Coords[1], precision: 10);
+        Assert.Equal(0.8,  color.Coords[2], precision: 10);
+    }
+
+    // ── OKLch colors ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_ParseJs_Oklch_100PercentLightness()
+    {
+        // oklch(100% 0 0) → L=1.0
+        var color = new Color("oklch(100% 0 0)");
+        Assert.Equal("oklch", color.Space.Id);
+        Assert.Equal(1.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0, color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Oklch_AlphaAsPercentage()
+    {
+        // oklch(100% 0 0 / 50%) — alpha as percentage
+        var color = new Color("oklch(100% 0 0 / 50%)");
+        Assert.Equal(1.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.5, color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Oklch_CaseInsensitive()
+    {
+        // OKLch(100% 0 0) — function name case insensitive
+        var color = new Color("OKLch(100% 0 0)");
+        Assert.Equal("oklch", color.Space.Id);
+        Assert.Equal(1.0, color.Coords[0], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Oklch_AllNumbers()
+    {
+        // oklch(1 0.2 50)
+        var color = new Color("oklch(1 0.2 50)");
+        Assert.Equal(1.0,  color.Coords[0], precision: 10);
+        Assert.Equal(0.2,  color.Coords[1], precision: 10);
+        Assert.Equal(50.0, color.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Oklch_OutOfRangeClampedAlpha()
+    {
+        // oklch(10 2 500 / 10) — alpha 10 clamped to 1
+        var color = new Color("oklch(10 2 500 / 10)");
+        Assert.Equal(10.0,  color.Coords[0], precision: 10);
+        Assert.Equal(2.0,   color.Coords[1], precision: 10);
+        Assert.Equal(500.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0,   color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Oklch_ChromaAsPercentage()
+    {
+        // oklch(100% 50% 50) — C as percentage: 50% × 0.4 = 0.2
+        var color = new Color("oklch(100% 50% 50)");
+        Assert.Equal(1.0,  color.Coords[0], precision: 10);
+        Assert.Equal(0.2,  color.Coords[1], precision: 10);
+        Assert.Equal(50.0, color.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Oklch_ChromaOver100Percent()
+    {
+        // oklch(100% 150% 50) — C: 150% × 0.4 = 0.6
+        var color = new Color("oklch(100% 150% 50)");
+        Assert.Equal(1.0,  color.Coords[0], precision: 10);
+        Assert.Equal(0.6,  color.Coords[1], precision: 5);
+        Assert.Equal(50.0, color.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Oklch_HueInDegrees()
+    {
+        // oklch(100% 0 30deg)
+        var color = new Color("oklch(100% 0 30deg)");
+        Assert.Equal(1.0,  color.Coords[0], precision: 10);
+        Assert.Equal(0.0,  color.Coords[1], precision: 10);
+        Assert.Equal(30.0, color.Coords[2], precision: 10);
+    }
+
+    // ── hsl() colors ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_CommasSyntax()
+    {
+        // hsl(180, 50%, 50%)
+        var color = new Color("hsl(180, 50%, 50%)");
+        Assert.Equal("hsl", color.Space.Id);
+        Assert.Equal(180.0, color.Coords[0], precision: 10);
+        Assert.Equal(50.0,  color.Coords[1], precision: 10);
+        Assert.Equal(50.0,  color.Coords[2], precision: 10);
+        Assert.Equal(1.0,   color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_NegativeHue()
+    {
+        // hsl(-180, 50%, 50%) — negative hue, stored as-is
+        var color = new Color("hsl(-180, 50%, 50%)");
+        Assert.Equal(-180.0, color.Coords[0], precision: 10);
+        Assert.Equal(50.0,   color.Coords[1], precision: 10);
+        Assert.Equal(50.0,   color.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_HueOver360()
+    {
+        // hsl(900, 50%, 50%) — hue > 360, not clamped
+        var color = new Color("hsl(900, 50%, 50%)");
+        Assert.Equal(900.0, color.Coords[0], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_DegHueSpaceSlashAlpha()
+    {
+        // hsl(90deg 0% 0% / .5)
+        var color = new Color("hsl(90deg 0% 0% / .5)");
+        Assert.Equal(90.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0,  color.Coords[1], precision: 10);
+        Assert.Equal(0.0,  color.Coords[2], precision: 10);
+        Assert.Equal(0.5,  color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_RadHueSpaceSlashAlpha()
+    {
+        // hsl(1.5707963267948966rad 0% 0% / .5) ≈ 90°
+        var color = new Color("hsl(1.5707963267948966rad 0% 0% / .5)");
+        Assert.Equal(90.0, color.Coords[0], precision: 5);
+        Assert.Equal(0.5,  color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_GradHueSpaceSlashAlpha()
+    {
+        // hsl(100grad 0% 0% / .5) — 100 grad = 90°
+        var color = new Color("hsl(100grad 0% 0% / .5)");
+        Assert.Equal(90.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.5,  color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_TurnHueSpaceSlashAlpha()
+    {
+        // hsl(0.25turn 0% 0% / .5) — 0.25 turn = 90°
+        var color = new Color("hsl(0.25turn 0% 0% / .5)");
+        Assert.Equal(90.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.5,  color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_OogSaturation()
+    {
+        // hsl(230.6 179.7% 37.56% / 1) — saturation > 100%, accepted as-is
+        var color = new Color("hsl(230.6 179.7% 37.56% / 1)");
+        Assert.Equal(230.6,  color.Coords[0], precision: 5);
+        Assert.Equal(179.7,  color.Coords[1], precision: 5);
+        Assert.Equal(37.56,  color.Coords[2], precision: 5);
+        Assert.Equal(1.0,    color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_LegacyCommaNoAlpha()
+    {
+        // hsl(0, 0%, 0%)
+        var color = new Color("hsl(0, 0%, 0%)");
+        Assert.Equal(0.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0, color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_LegacyCommaWithAlpha()
+    {
+        // hsl(0, 0%, 0%, 0.5)
+        var color = new Color("hsl(0, 0%, 0%, 0.5)");
+        Assert.Equal(0.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.5, color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_ModernPercentageNoAlpha()
+    {
+        // hsl(0 50% 25%)
+        var color = new Color("hsl(0 50% 25%)");
+        Assert.Equal(0.0,  color.Coords[0], precision: 10);
+        Assert.Equal(50.0, color.Coords[1], precision: 10);
+        Assert.Equal(25.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0,  color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_ModernPercentageWithAlpha()
+    {
+        // hsl(0 50% 25% / 50%) — alpha as percentage
+        var color = new Color("hsl(0 50% 25% / 50%)");
+        Assert.Equal(0.0,  color.Coords[0], precision: 10);
+        Assert.Equal(50.0, color.Coords[1], precision: 10);
+        Assert.Equal(25.0, color.Coords[2], precision: 10);
+        Assert.Equal(0.5,  color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_ModernNumberNoAlpha()
+    {
+        // hsl(0 50 25) — raw numbers for S and L
+        var color = new Color("hsl(0 50 25)");
+        Assert.Equal(0.0,  color.Coords[0], precision: 10);
+        Assert.Equal(50.0, color.Coords[1], precision: 10);
+        Assert.Equal(25.0, color.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsl_ModernNumberWithAlpha()
+    {
+        // hsl(0 50 25 / 50%)
+        var color = new Color("hsl(0 50 25 / 50%)");
+        Assert.Equal(50.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.5,  color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsla_DegHueNoAlpha()
+    {
+        // hsla(240deg 100% 50%)
+        var color = new Color("hsla(240deg 100% 50%)");
+        Assert.Equal("hsl",  color.Space.Id);
+        Assert.Equal(240.0,  color.Coords[0], precision: 10);
+        Assert.Equal(100.0,  color.Coords[1], precision: 10);
+        Assert.Equal(50.0,   color.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hsla_DegHueWithAlpha()
+    {
+        // hsla(240deg 100% 50% / 0.5)
+        var color = new Color("hsla(240deg 100% 50% / 0.5)");
+        Assert.Equal(240.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.5,   color.Alpha);
+    }
+
+    // ── hwb() colors ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_ParseJs_Hwb_WithPercentages()
+    {
+        // hwb(180 20% 30%)
+        var color = new Color("hwb(180 20% 30%)");
+        Assert.Equal("hwb", color.Space.Id);
+        Assert.Equal(180.0, color.Coords[0], precision: 10);
+        Assert.Equal(20.0,  color.Coords[1], precision: 10);
+        Assert.Equal(30.0,  color.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_Hwb_WithRawNumbers()
+    {
+        // hwb(180 20 30) — raw numbers (no % sign)
+        var color = new Color("hwb(180 20 30)");
+        Assert.Equal("hwb", color.Space.Id);
+        Assert.Equal(180.0, color.Coords[0], precision: 10);
+        Assert.Equal(20.0,  color.Coords[1], precision: 10);
+        Assert.Equal(30.0,  color.Coords[2], precision: 10);
+    }
+
+    // ── parsing metadata ──────────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_ParseJs_Metadata_HexFormatId()
+    {
+        // Parse metadata should capture "hex" for a hex string
+        Assert.Equal("hex", new Color("#ff8000").ParseMeta?.FormatId);
+    }
 }
