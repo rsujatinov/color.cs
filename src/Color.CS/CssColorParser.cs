@@ -65,12 +65,16 @@ internal static class CssColorParser
         return (space, buffer[..i].ToArray(), alpha);
     }
 
-    private static double ParseComponent(ReadOnlySpan<char> token) =>
-        token.Trim() switch
+    private static double ParseComponent(ReadOnlySpan<char> token)
+    {
+        var t = token.Trim();
+        return t switch
         {
-            var t when t.Equals("none", StringComparison.OrdinalIgnoreCase) => double.NaN,
-            var t => double.Parse(t, NumberStyles.Float, CultureInfo.InvariantCulture)
+            var s when s.Equals("none", StringComparison.OrdinalIgnoreCase) => double.NaN,
+            var s when s.EndsWith("%") => double.Parse(s[..^1], NumberStyles.Float, CultureInfo.InvariantCulture) / 100.0,
+            _ => double.Parse(t, NumberStyles.Float, CultureInfo.InvariantCulture)
         };
+    }
 
     /// <summary>Ref-struct enumerator that splits a <see cref="ReadOnlySpan{char}"/> on spaces.</summary>
     private ref struct SpaceSplitEnumerator(ReadOnlySpan<char> span)

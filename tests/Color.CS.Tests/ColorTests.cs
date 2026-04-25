@@ -496,4 +496,37 @@ public sealed class ColorTests
         var color = new Color("color(srgb 0.09e1 0 0)");
         Assert.Equal(0.9, color.Coords[0], precision: 10);
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Ported from color.js — parse.js → color() percentage notation
+    // https://github.com/color-js/color.js/blob/main/test/parse.js
+    // ──────────────────────────────────────────────────────────────────────
+
+    // color(srgb 0 100% 50%) — percentage coords: 100% → 1.0, 50% → 0.5
+    [Fact]
+    public void Ported_Parse_ColorFunction_PercentageCoords()
+    {
+        var color = new Color("color(srgb 0 100% 50%)");
+        Assert.Equal("""{"spaceId":"srgb","coords":[0,1,0.5],"alpha":1}""", color.ToJson());
+    }
+
+    // color(srgb 0 100% 50% / 0.5) — percentage coords with alpha
+    [Fact]
+    public void Ported_Parse_ColorFunction_PercentageCoordsWithAlpha()
+    {
+        var color = new Color("color(srgb 0 100% 50% / 0.5)");
+        Assert.Equal(0.0, color.Coords[0], precision: 10);
+        Assert.Equal(1.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.5, color.Coords[2], precision: 10);
+        Assert.Equal(0.5, color.Alpha);
+    }
+
+    // color(srgb 0 1 0 / none) — none alpha in color() maps to NaN / null in JSON
+    [Fact]
+    public void Ported_Parse_ColorFunction_NoneAlpha()
+    {
+        var color = new Color("color(srgb 0 1 0 / none)");
+        Assert.True(double.IsNaN(color.Alpha));
+        Assert.Contains("\"alpha\":null", color.ToJson());
+    }
 }
