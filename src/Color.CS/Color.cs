@@ -51,8 +51,8 @@ public sealed record Color
         var result = CssColorParser.TryParse(cssString);
         if (result is ParseResult.Failure failure)
             throw new FormatException(failure.Error);
-        var s = (ParseResult.Success)result;
-        (Space, Coords, Alpha, ParseMeta) = (s.Space, s.Coords, s.Alpha, s.Meta);
+        var success = (ParseResult.Success)result;
+        (Space, Coords, Alpha, ParseMeta) = (success.Space, success.Coords, success.Alpha, success.Meta);
     }
 
     /// <summary>Creates a <see cref="Color"/> from a <see cref="PlainColorObject"/>.</summary>

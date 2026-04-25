@@ -53,21 +53,14 @@ internal static class CssColorParser
         var len = hex.Length;
 
         // Expand shorthand: #rgb → rrggbb, #rgba → rrggbbaa
-        string full;
-        if (len is 3 or 4)
+        string? full = len switch
         {
-            Span<char> buf = stackalloc char[len * 2];
-            for (var i = 0; i < len; i++) buf[i * 2] = buf[i * 2 + 1] = hex[i];
-            full = new string(buf);
-        }
-        else if (len is 6 or 8)
-        {
-            full = hex.ToString();
-        }
-        else
-        {
+            3 or 4 => ExpandShortHex(hex),
+            6 or 8 => hex.ToString(),
+            _ => null,
+        };
+        if (full is null)
             return ParseResult.Fail($"Invalid hex color '{s}': expected 3, 4, 6, or 8 hex digits.");
-        }
 
         if (!TryParseHexByte(full, 0, out var r) ||
             !TryParseHexByte(full, 2, out var g) ||
@@ -84,6 +77,13 @@ internal static class CssColorParser
 
         Span<double> coords = [r / 255.0, g / 255.0, b / 255.0];
         return ParseResult.Ok(ColorSpace.Srgb, coords, alpha, "hex");
+    }
+
+    private static string ExpandShortHex(ReadOnlySpan<char> hex)
+    {
+        Span<char> buf = stackalloc char[hex.Length * 2];
+        for (var i = 0; i < hex.Length; i++) buf[i * 2] = buf[i * 2 + 1] = hex[i];
+        return new string(buf);
     }
 
     private static bool TryParseHexByte(string s, int offset, out double value)
@@ -307,7 +307,7 @@ internal static class CssColorParser
     /// Splits the arguments of a CSS function into coordinate tokens and an alpha value.
     /// Supports both comma-separated (legacy) and modern space + <c>/</c> syntax.
     /// </summary>
-    private static (string[] CoordTokens, double Alpha) SplitArgs(string inner)
+    private static (string[] coordTokens, double alpha) SplitArgs(string inner)
     {
         // Legacy comma-separated: rgb(r, g, b) or rgba(r, g, b, a)
         if (inner.Contains(','))
@@ -337,8 +337,9 @@ internal static class CssColorParser
             coordPart = inner.Trim();
         }
 
-        var tokens = new List<string>();
-        foreach (var part in new SpaceSplitEnumerator(coordPart.AsSpan()))
+        var span = coordPart.AsSpan();
+        var tokens = new List<string>(4);
+        foreach (var part in new SpaceSplitEnumerator(span))
             tokens.Add(part.ToString());
 
         return ([.. tokens], alpha);

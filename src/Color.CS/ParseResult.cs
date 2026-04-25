@@ -26,7 +26,7 @@ public abstract record ParseResult
         double alpha,
         string? formatId = null) =>
         new(space, ImmutableArray.Create(coords), alpha,
-            formatId is null ? null : new ParseMeta(formatId));
+            formatId is not null ? new ParseMeta(formatId) : null);
 
     internal static Failure Fail(string error) => new(error);
 }

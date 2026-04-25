@@ -218,8 +218,8 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
             Coords = new Dictionary<string, CoordMetadata>
             {
                 ["lightness"] = new() { Name = "Lightness", Range    = new CoordRange(0, 1) },
-                ["a"]         = new() { Name = "a",          Range    = new CoordRange(-0.5, 0.5), RefRange = new CoordRange(-0.5, 0.5) },
-                ["b"]         = new() { Name = "b",          Range    = new CoordRange(-0.5, 0.5), RefRange = new CoordRange(-0.5, 0.5) },
+                ["a"]         = new() { Name = "a",          Range    = new CoordRange(-0.5, 0.5) },
+                ["b"]         = new() { Name = "b",          Range    = new CoordRange(-0.5, 0.5) },
             },
             Formats = [new() { Id = "oklab", Type = "function" }],
         });
