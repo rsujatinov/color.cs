@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- NuGet package metadata (project-specific) -->
+  <PropertyGroup>
+    <PackageId>Color.CS</PackageId>
+    <PackageTags>color;colorspace;css;parsing</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>
