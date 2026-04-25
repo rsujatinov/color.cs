@@ -681,4 +681,153 @@ public sealed class ColorSpaceTests
         ColorSpace.Register(cs);
         Assert.Same(cs, ColorSpace.Get(id));
     }
+
+    // ── Ported from color.js ─────────────────────────────────────────────────
+    // Source: https://github.com/color-js/color.js/blob/main/test/in_gamut.js
+
+    /// <summary>
+    /// Creates an HSL-like polar space whose three channels are (hue, saturation, lightness).
+    /// ToBase divides s and l by 100 so they map to [0,1]; FromBase multiplies back.
+    /// The hue channel has type=Angle and no range.
+    /// </summary>
+    private static ColorSpace MakeHslLike(string id, ColorSpace baseSpace) =>
+        new(new ColorSpaceOptions
+        {
+            Id = id,
+            Name = id,
+            Base = baseSpace,
+            Coords = new Dictionary<string, CoordMetadata>
+            {
+                ["h"] = new() { Name = "Hue",        Type = CoordType.Angle },
+                ["s"] = new() { Name = "Saturation", Range = new CoordRange(0, 100) },
+                ["l"] = new() { Name = "Lightness",  Range = new CoordRange(0, 100) },
+            },
+            // Linear mapping for testing: [h, s, l] → [h/360, s/100, l/100]
+            ToBase   = c => [c[0] / 360.0, c[1] / 100.0, c[2] / 100.0],
+            FromBase = c => [c[0] * 360.0, c[1] * 100.0, c[2] * 100.0],
+        });
+
+    /// <summary>
+    /// Creates a polar space whose hue channel has an EXPLICIT range [0, 360] AND type=Angle,
+    /// to verify that angle coords are excluded from gamut checking even when a range is present.
+    /// Mirrors the "Angle coordinates should not be gamut checked" test in color.js in_gamut.js.
+    /// </summary>
+    private static ColorSpace MakePolarWithBoundedAngle(string id) =>
+        new(new ColorSpaceOptions
+        {
+            Id = id,
+            Name = id,
+            Coords = new Dictionary<string, CoordMetadata>
+            {
+                // Angle coord WITH an explicit range — should still be skipped by InGamut.
+                ["h"] = new() { Name = "Hue",        Type = CoordType.Angle, Range = new CoordRange(0, 360) },
+                ["s"] = new() { Name = "Saturation", Range = new CoordRange(0, 100) },
+                ["l"] = new() { Name = "Lightness",  Range = new CoordRange(0, 100) },
+            },
+        });
+
+    // Ported: in_gamut.js — "Lab (unbounded color space)"
+    // Large coordinates in an unbounded space are always in gamut.
+    [Fact]
+    public void Ported_InGamut_UnboundedSpace_AlwaysInGamut()
+    {
+        var lab = MakeUnbounded(Uid("lab-like"));
+        Assert.True(lab.InGamut([1000.0, 1000.0]));
+    }
+
+    // Ported: in_gamut.js — "Angle coordinates should not be gamut checked"
+    // A hue value of 720 is outside [0, 360] but angle coords are never range-checked.
+    [Fact]
+    public void Ported_InGamut_AngleCoordWithRange_NotGamutChecked()
+    {
+        // hue=720 would be out of the explicit [0,360] range, but it's an angle → passes.
+        var cs = MakePolarWithBoundedAngle(Uid("polar-bounded-angle"));
+        Assert.True(cs.InGamut([720.0, 50.0, 25.0]));
+    }
+
+    // Ported: in_gamut.js — "Angle coordinates should not be gamut checked"
+    // Saturation IS range-checked, so an out-of-range saturation must fail.
+    [Fact]
+    public void Ported_InGamut_NonAngleCoordWithRange_IsGamutChecked()
+    {
+        var cs = MakePolarWithBoundedAngle(Uid("polar-bounded-sat"));
+        Assert.False(cs.InGamut([180.0, 110.0, 50.0]));
+    }
+
+    // Ported: in_gamut.js — "HSL (polar space, defaults to the base space)"
+    // An in-gamut polar-space colour is also in gamut when checked via its base.
+    [Fact]
+    public void Ported_InGamut_PolarSpace_InGamutDelegatesConversionToBase()
+    {
+        // sRGB [0, 1.0, 0.5] ← ToBase([0, 100, 50]) → [0/360, 1.0, 0.5] ✓
+        var srgbLike = MakeLinear(Uid("hsl-base-ok"));
+        var hslLike  = MakeHslLike(Uid("hsl-like-ok"), srgbLike);
+
+        Assert.True(hslLike.InGamut([0.0, 100.0, 50.0]));
+    }
+
+    // Ported: in_gamut.js — "HSL (polar space, defaults to the base space)" (out-of-gamut case)
+    // Saturation 101 maps to 1.01 in the base space, which is out of [0,1].
+    [Fact]
+    public void Ported_InGamut_PolarSpace_OutOfGamutDelegatesConversionToBase()
+    {
+        // sRGB [0, 1.01, 0.5] ← ToBase([0, 101, 50]) → [0, 1.01, 0.5] ✗
+        var srgbLike = MakeLinear(Uid("hsl-base-bad"));
+        var hslLike  = MakeHslLike(Uid("hsl-like-bad"), srgbLike);
+
+        Assert.False(hslLike.InGamut([0.0, 101.0, 50.0]));
+    }
+
+    // Ported: in_gamut.js — "HSL (polar space, defaults to the base space)"
+    // A display-P3-like colour outside sRGB gamut is out of the HSL-like gamut too.
+    [Fact]
+    public void Ported_InGamut_PolarSpace_OutOfBaseGamutIsOutOfGamut()
+    {
+        var srgbLike = MakeLinear(Uid("hsl-base-p3"));
+        var hslLike  = MakeHslLike(Uid("hsl-like-p3"), srgbLike);
+
+        // Passing coords that, after ToBase, give a value > 1.0 in one channel.
+        // [0, 110, 50] → [0, 1.1, 0.5] — out of [0,1] for the base space.
+        Assert.False(hslLike.InGamut([0.0, 110.0, 50.0]));
+    }
+
+    // Ported: ColorSpace.js — InGamut default epsilon matches color.js ε = 0.000075.
+    // A value just inside (1 - epsilon) should pass; just outside (1 + 2*epsilon) should fail.
+    [Fact]
+    public void Ported_InGamut_DefaultEpsilonMatchesColorJs()
+    {
+        // 1.000075 is on the boundary (equal to max + epsilon) → pass.
+        Assert.True(ColorSpace.Srgb.InGamut([0.5, 1.000075, 0.5]));
+        // 1.0001 > 1 + 0.000075 → fail.
+        Assert.False(ColorSpace.Srgb.InGamut([0.5, 1.0001, 0.5]));
+    }
+
+    // Ported: conversions.js — identity conversion (same space) returns equivalent coords.
+    [Fact]
+    public void Ported_Conversions_SameSpaceReturnsCopy()
+    {
+        double[] coords = [1.0, 0.0, 0.0];
+        var result = ColorSpace.Srgb.To(ColorSpace.Srgb, coords);
+        Assert.Equal(coords, result);
+    }
+
+    // Ported: conversions.js — multi-hop conversion through a common ancestor.
+    // Mirrors the general "go up from source, go down to target via LCA" algorithm.
+    [Fact]
+    public void Ported_Conversions_MultiHop_ViaCommonAncestor()
+    {
+        // Build a 2-space tree:  root ← a (+100),  root ← b (*2)
+        // Converting a → b:  (coords + 100) * 2
+        var root = MakeLinear(Uid("conv-root-mh"));
+        var a    = MakeLinear(Uid("conv-a-mh"), baseSpace: root,
+            toBase:   c => c.Select(v => v + 100).ToArray(),
+            fromBase: c => c.Select(v => v - 100).ToArray());
+        var b    = MakeLinear(Uid("conv-b-mh"), baseSpace: root,
+            toBase:   c => c.Select(v => v / 2).ToArray(),
+            fromBase: c => c.Select(v => v * 2).ToArray());
+
+        // a.To(b): ascend a→root (+100), descend root→b (*2)
+        var result = a.To(b, [1.0, 2.0, 3.0]);
+        Assert.Equal([(1 + 100) * 2.0, (2 + 100) * 2.0, (3 + 100) * 2.0], result);
+    }
 }

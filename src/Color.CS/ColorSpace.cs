@@ -272,16 +272,33 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
     // ── Gamut ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Returns <c>true</c> if all bounded coordinates of <paramref name="coords"/> fall within
-    /// their defined <see cref="CoordMetadata.Range"/> (± <paramref name="epsilon"/>).
-    /// Unbounded coordinates and <see cref="double.NaN"/> (<c>none</c>) values are always in-gamut.
+    /// Returns <c>true</c> if all bounded, non-angle coordinates of <paramref name="coords"/> fall
+    /// within their defined <see cref="CoordMetadata.Range"/> (± <paramref name="epsilon"/>).
+    /// <para>
+    /// For spaces whose <see cref="GamutSpace"/> differs from <c>this</c> (e.g. polar spaces),
+    /// the coordinates are first converted to the gamut space and checked there, mirroring
+    /// the behaviour of <c>ColorSpace.js</c> in color.js.
+    /// </para>
+    /// Angle coordinates, unbounded coordinates, and <see cref="double.NaN"/> (<c>none</c>)
+    /// values are always considered in-gamut.
     /// </summary>
-    public bool InGamut(double[] coords, double epsilon = 1e-6)
+    public virtual bool InGamut(double[] coords, double epsilon = 0.000075)
     {
+        // Polar spaces (and spaces with an explicit gamutSpace) delegate to their gamut space.
+        if (!Equals(GamutSpace))
+        {
+            var gamutCoords = To(GamutSpace, coords);
+            return GamutSpace.InGamut(gamutCoords, epsilon);
+        }
+
         var channels = Channels;
         for (var i = 0; i < channels.Length && i < coords.Length; i++)
         {
-            if (!Coords.TryGetValue(channels[i], out var meta) || meta.Range is not { } range)
+            if (!Coords.TryGetValue(channels[i], out var meta))
+                continue;
+
+            // Angle coordinates are never gamut-checked even when an explicit range is defined.
+            if (meta.Type == CoordType.Angle || meta.Range is not { } range)
                 continue;
 
             var v = coords[i];
