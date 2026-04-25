@@ -11,51 +11,63 @@ namespace Color.CS;
 /// </remarks>
 internal static class CssColorParser
 {
-    internal static (ColorSpace Space, double[] Coords, double Alpha) Parse(string css)
-    {
-        var s = css.AsSpan().Trim();
-
-        if (s.StartsWith("color(", StringComparison.OrdinalIgnoreCase) && s.EndsWith(")"))
-            return ParseColorFunction(s["color(".Length..^1]);
-
-        throw new FormatException($"Unsupported CSS color format: '{css}'. Only the color() function is currently supported.");
-    }
+    internal static (ColorSpace Space, double[] Coords, double Alpha) Parse(string css) =>
+        css.AsSpan().Trim() switch
+        {
+            var s when s.StartsWith("color(", StringComparison.OrdinalIgnoreCase) && s.EndsWith(")")
+                => ParseColorFunction(s["color(".Length..^1]),
+            _ => throw new FormatException(
+                $"Unsupported CSS color format: '{css}'. Only the color() function is currently supported.")
+        };
 
     private static (ColorSpace Space, double[] Coords, double Alpha) ParseColorFunction(ReadOnlySpan<char> inner)
     {
         inner = inner.Trim();
 
-        double alpha = 1.0;
         var slashIdx = inner.IndexOf('/');
+        double alpha;
+        ReadOnlySpan<char> coordsSpan;
         if (slashIdx >= 0)
         {
             alpha = ParseComponent(inner[(slashIdx + 1)..].Trim());
-            inner = inner[..slashIdx].Trim();
+            coordsSpan = inner[..slashIdx].Trim();
+        }
+        else
+        {
+            alpha = 1.0;
+            coordsSpan = inner;
         }
 
-        var spaceEnd = inner.IndexOf(' ');
-        if (spaceEnd < 0)
-            throw new FormatException("color() function must contain at least a space identifier.");
+        var spaceEnd = coordsSpan.IndexOf(' ') switch
+        {
+            < 0 => throw new FormatException("color() function must contain at least a space identifier."),
+            var idx => idx
+        };
 
-        var spaceId = inner[..spaceEnd].ToString();
+        var spaceId = coordsSpan[..spaceEnd].ToString();
         var space = ColorSpace.FromId(spaceId)
             ?? throw new FormatException($"Unknown color space identifier: '{spaceId}'.");
 
-        var coordSpan = inner[(spaceEnd + 1)..].Trim();
-        var builder = new System.Collections.Generic.List<double>();
+        var coordSpan = coordsSpan[(spaceEnd + 1)..].Trim();
+        var channelCount = space.Channels.Length;
+        Span<double> buffer = stackalloc double[channelCount];
+        var i = 0;
         foreach (var part in new SpaceSplitEnumerator(coordSpan))
-            builder.Add(ParseComponent(part));
+        {
+            if (i >= channelCount)
+                throw new FormatException($"Too many coordinates for color space '{spaceId}' (expected {channelCount}).");
+            buffer[i++] = ParseComponent(part);
+        }
 
-        return (space, builder.ToArray(), alpha);
+        return (space, buffer[..i].ToArray(), alpha);
     }
 
-    private static double ParseComponent(ReadOnlySpan<char> token)
-    {
-        token = token.Trim();
-        return token.Equals("none", StringComparison.OrdinalIgnoreCase)
-            ? double.NaN
-            : double.Parse(token, NumberStyles.Float, CultureInfo.InvariantCulture);
-    }
+    private static double ParseComponent(ReadOnlySpan<char> token) =>
+        token.Trim() switch
+        {
+            var t when t.Equals("none", StringComparison.OrdinalIgnoreCase) => double.NaN,
+            var t => double.Parse(t, NumberStyles.Float, CultureInfo.InvariantCulture)
+        };
 
     /// <summary>Ref-struct enumerator that splits a <see cref="ReadOnlySpan{char}"/> on spaces.</summary>
     private ref struct SpaceSplitEnumerator(ReadOnlySpan<char> span)

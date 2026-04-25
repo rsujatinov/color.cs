@@ -29,42 +29,31 @@ public sealed record Color
 
     /// <summary>Creates a <see cref="Color"/> from a <c>double[]</c> coordinate array.</summary>
     public Color(ColorSpace space, double[] coords, double alpha = 1.0)
-    {
-        Space = space;
-        Coords = ImmutableArray.Create(coords);
-        Alpha = alpha;
-    }
+        => (Space, Coords, Alpha) = (space, ImmutableArray.Create(coords), alpha);
 
     /// <summary>
     /// Creates a <see cref="Color"/> from a <see cref="ReadOnlySpan{T}"/> of coordinates.
     /// Collection expressions (e.g. <c>[1.0, 0.0, 0.0]</c>) resolve to this overload.
     /// </summary>
     public Color(ColorSpace space, ReadOnlySpan<double> coords, double alpha = 1.0)
-    {
-        Space = space;
-        Coords = ImmutableArray.Create(coords);
-        Alpha = alpha;
-    }
+        => (Space, Coords, Alpha) = (space, ImmutableArray.Create(coords), alpha);
 
     /// <summary>Parses a CSS Color Level 4 string (currently supports the <c>color()</c> function).</summary>
     /// <exception cref="FormatException">The string is not a supported CSS color format.</exception>
     public Color(string cssString)
     {
         var (space, coords, alpha) = CssColorParser.Parse(cssString);
-        Space = space;
-        Coords = ImmutableArray.Create<double>(coords);
-        Alpha = alpha;
+        (Space, Coords, Alpha) = (space, ImmutableArray.Create<double>(coords), alpha);
     }
 
     /// <summary>Creates a <see cref="Color"/> from a <see cref="PlainColorObject"/>.</summary>
     /// <exception cref="ArgumentException">The space identifier in <paramref name="obj"/> is unknown.</exception>
     public Color(PlainColorObject obj)
-    {
-        Space = ColorSpace.FromId(obj.SpaceId)
-            ?? throw new ArgumentException($"Unknown color space: '{obj.SpaceId}'.", nameof(obj));
-        Coords = obj.Coords;
-        Alpha = obj.Alpha;
-    }
+        => (Space, Coords, Alpha) = (
+            ColorSpace.FromId(obj.SpaceId)
+                ?? throw new ArgumentException($"Unknown color space: '{obj.SpaceId}'.", nameof(obj)),
+            obj.Coords,
+            obj.Alpha);
 
     // ──────────────────────────────────────────────────────────────────────
     // Coordinate accessors
@@ -76,17 +65,13 @@ public sealed record Color
     /// <exception cref="ArgumentException">
     /// The channel name is not defined in <see cref="Space"/>.
     /// </exception>
-    public double this[string channelName]
-    {
-        get
+    public double this[string channelName] =>
+        Space.CoordIndex(channelName) switch
         {
-            var idx = Space.CoordIndex(channelName);
-            if (idx < 0 || idx >= Coords.Length)
-                throw new ArgumentException(
-                    $"Channel '{channelName}' not found in color space '{Space.Id}'.", nameof(channelName));
-            return Coords[idx];
-        }
-    }
+            var idx when (uint)idx < (uint)Coords.Length => Coords[idx],
+            _ => throw new ArgumentException(
+                $"Channel '{channelName}' not found in color space '{Space.Id}'.", nameof(channelName))
+        };
 
     // ──────────────────────────────────────────────────────────────────────
     // Mutation helpers
@@ -101,15 +86,8 @@ public sealed record Color
     // ──────────────────────────────────────────────────────────────────────
 
     /// <summary>Serialises this color to a JSON object <c>{ spaceId, coords, alpha }</c>.</summary>
-    public string ToJson()
-    {
-        var coords = string.Join(",", Coords.Select(c =>
-            double.IsNaN(c) ? "null" : c.ToString("G", CultureInfo.InvariantCulture)));
-        var alpha = double.IsNaN(Alpha)
-            ? "null"
-            : Alpha.ToString("G", CultureInfo.InvariantCulture);
-        return $$"""{"spaceId":"{{Space.Id}}","coords":[{{coords}}],"alpha":{{alpha}}}""";
-    }
+    public string ToJson() =>
+        $$"""{"spaceId":"{{Space.Id}}","coords":[{{string.Join(",", Coords.Select(static c => double.IsNaN(c) ? "null" : c.ToString("G", CultureInfo.InvariantCulture)))}}],"alpha":{{(double.IsNaN(Alpha) ? "null" : Alpha.ToString("G", CultureInfo.InvariantCulture))}}}""";
 
     /// <inheritdoc/>
     public override string ToString() => ToJson();
@@ -158,4 +136,3 @@ public static class ColorExtensions
     /// </remarks>
     public static Color Clone(this Color color) => color with { };
 }
-
