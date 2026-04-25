@@ -59,6 +59,9 @@ internal static class CssColorParser
             buffer[i++] = ParseComponent(part);
         }
 
+        if (i < channelCount)
+            throw new FormatException($"Too few coordinates for color space '{spaceId}' (expected {channelCount}, got {i}).");
+
         return (space, buffer[..i].ToArray(), alpha);
     }
 

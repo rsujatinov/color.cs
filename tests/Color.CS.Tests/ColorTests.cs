@@ -293,4 +293,207 @@ public sealed class ColorTests
         Assert.NotNull(color);
         Assert.Equal(ColorSpace.Srgb, color.Space);
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Ported from color.js — construct.js
+    // https://github.com/color-js/color.js/blob/main/test/construct.js
+    // ──────────────────────────────────────────────────────────────────────
+
+    // new Color({spaceId, coords}) — tests the PlainColorObject overload
+    [Fact]
+    public void Ported_Construct_PlainObject_SpaceAndCoords()
+    {
+        var color = new Color(new PlainColorObject("srgb", [0.0, 1.0, 0.0]));
+        Assert.Equal("""{"spaceId":"srgb","coords":[0,1,0],"alpha":1}""", color.ToJson());
+    }
+
+    // new Color({spaceId, coords, alpha})
+    [Fact]
+    public void Ported_Construct_PlainObject_WithAlpha()
+    {
+        var color = new Color(new PlainColorObject("srgb", [0.0, 1.0, 0.0], 0.5));
+        Assert.Equal("""{"spaceId":"srgb","coords":[0,1,0],"alpha":0.5}""", color.ToJson());
+    }
+
+    // new Color({spaceId, coords, alpha}), clamp alpha > 1 → 1
+    [Fact]
+    public void Ported_Construct_PlainObject_ClampAlphaAboveOne()
+    {
+        var color = new Color(new PlainColorObject("srgb", [0.0, 1.0, 0.0], 1000.0));
+        Assert.Equal(1.0, color.Alpha);
+    }
+
+    // new Color({spaceId, coords, alpha: NaN}) — NaN is the "none" sentinel
+    [Fact]
+    public void Ported_Construct_PlainObject_NanAlpha()
+    {
+        var color = new Color(new PlainColorObject("srgb", [0.0, 1.0, 0.0], double.NaN));
+        Assert.True(double.IsNaN(color.Alpha));
+        Assert.Contains("\"alpha\":null", color.ToJson());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Ported from color.js — coords.js
+    // https://github.com/color-js/color.js/blob/main/test/coords.js
+    // ──────────────────────────────────────────────────────────────────────
+
+    // color.coords → [1, 0, 0]
+    [Fact]
+    public void Ported_Coords_CoordsProperty()
+    {
+        var red = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        Assert.Equal([1.0, 0.0, 0.0], (IEnumerable<double>)red.Coords);
+    }
+
+    // color.alpha → 0.5
+    [Fact]
+    public void Ported_Coords_AlphaProperty()
+    {
+        var red50 = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], 0.5);
+        Assert.Equal(0.5, red50.Alpha);
+    }
+
+    // color.coords[index]
+    [Fact]
+    public void Ported_Coords_IndexAccess()
+    {
+        var red = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        Assert.Equal(0.0, red.Coords[1]);
+    }
+
+    // color.coordId — named channel accessor (maps to our string indexer)
+    [Fact]
+    public void Ported_Coords_NamedChannelAccess()
+    {
+        // In color.js: color.h for oklch; we use color["red"] for srgb
+        var red = new Color(ColorSpace.Srgb, [1.0, 0.5, 0.25]);
+        Assert.Equal(1.0, red["red"]);
+        Assert.Equal(0.5, red["green"]);
+        Assert.Equal(0.25, red["blue"]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Ported from color.js — parse.js → color() function tests
+    // https://github.com/color-js/color.js/blob/main/test/parse.js
+    // ──────────────────────────────────────────────────────────────────────
+
+    // color(srgb 0 1 .5) — decimal without leading zero
+    [Fact]
+    public void Ported_Parse_ColorFunction_DecimalWithoutLeadingZero()
+    {
+        var color = new Color("color(srgb 0 1 .5)");
+        Assert.Equal("""{"spaceId":"srgb","coords":[0,1,0.5],"alpha":1}""", color.ToJson());
+    }
+
+    // color(srgb none 0 0) — none coordinate (maps to null in JSON, NaN in C#)
+    [Fact]
+    public void Ported_Parse_ColorFunction_NoneCoordinate()
+    {
+        var color = new Color("color(srgb none 0 0)");
+        Assert.True(double.IsNaN(color.Coords[0]));
+        Assert.Contains("\"coords\":[null,", color.ToJson());
+    }
+
+    // color(srgb 0 1 0 / 0.5) — with transparency
+    [Fact]
+    public void Ported_Parse_ColorFunction_WithTransparency()
+    {
+        var color = new Color("color(srgb 0 1 0 / .5)");
+        Assert.Equal("""{"spaceId":"srgb","coords":[0,1,0],"alpha":0.5}""", color.ToJson());
+    }
+
+    // color(srgb) — no arguments (spaceId only) → throws
+    [Fact]
+    public void Ported_Parse_ColorFunction_NoArguments_Throws()
+    {
+        Assert.Throws<FormatException>(() => new Color("color(srgb)"));
+    }
+
+    // color(srgb / .5) — spaceId + alpha only, no coords → throws
+    [Fact]
+    public void Ported_Parse_ColorFunction_AlphaOnlyNoCoords_Throws()
+    {
+        Assert.Throws<FormatException>(() => new Color("color(srgb / .5)"));
+    }
+
+    // color(srgb 1) — fewer arguments than channels → throws
+    [Fact]
+    public void Ported_Parse_ColorFunction_FewerArguments_Throws()
+    {
+        Assert.Throws<FormatException>(() => new Color("color(srgb 1)"));
+    }
+
+    // color(srgb 1 / .5) — fewer arguments + alpha → throws
+    [Fact]
+    public void Ported_Parse_ColorFunction_FewerArgumentsWithAlpha_Throws()
+    {
+        Assert.Throws<FormatException>(() => new Color("color(srgb 1 / .5)"));
+    }
+
+    // color(srgb 1 1 1 1) — more arguments than channels → throws
+    [Fact]
+    public void Ported_Parse_ColorFunction_MoreArguments_Throws()
+    {
+        Assert.Throws<FormatException>(() => new Color("color(srgb 1 1 1 1)"));
+    }
+
+    // color(srgb 1 1 1 1 / .5) — more arguments + alpha → throws
+    [Fact]
+    public void Ported_Parse_ColorFunction_MoreArgumentsWithAlpha_Throws()
+    {
+        Assert.Throws<FormatException>(() => new Color("color(srgb 1 1 1 1 / .5)"));
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Ported from color.js — parse.js → "Different number formats"
+    // https://github.com/color-js/color.js/blob/main/test/parse.js
+    // ──────────────────────────────────────────────────────────────────────
+
+    // color(srgb +0.9 0 0) — explicit leading plus sign
+    [Fact]
+    public void Ported_Parse_NumberFormat_LeadingPlus()
+    {
+        var color = new Color("color(srgb +0.9 0 0)");
+        Assert.Equal(0.9, color.Coords[0], precision: 10);
+    }
+
+    // color(srgb .9 0 0) — no leading zero before decimal point
+    [Fact]
+    public void Ported_Parse_NumberFormat_NoLeadingZero()
+    {
+        var color = new Color("color(srgb .9 0 0)");
+        Assert.Equal(0.9, color.Coords[0], precision: 10);
+    }
+
+    // color(srgb 9e-1 0 0) — scientific notation, lowercase 'e'
+    [Fact]
+    public void Ported_Parse_NumberFormat_ScientificLowercase()
+    {
+        var color = new Color("color(srgb 9e-1 0 0)");
+        Assert.Equal(0.9, color.Coords[0], precision: 10);
+    }
+
+    // color(srgb 9E-1 0 0) — scientific notation, uppercase 'E'
+    [Fact]
+    public void Ported_Parse_NumberFormat_ScientificUppercase()
+    {
+        var color = new Color("color(srgb 9E-1 0 0)");
+        Assert.Equal(0.9, color.Coords[0], precision: 10);
+    }
+
+    // color(srgb 0.09e+1 0 0) — scientific notation with explicit positive exponent
+    [Fact]
+    public void Ported_Parse_NumberFormat_ScientificExplicitPositiveExponent()
+    {
+        var color = new Color("color(srgb 0.09e+1 0 0)");
+        Assert.Equal(0.9, color.Coords[0], precision: 10);
+    }
+
+    // color(srgb 0.09e1 0 0) — scientific notation without exponent sign
+    [Fact]
+    public void Ported_Parse_NumberFormat_ScientificNoExponentSign()
+    {
+        var color = new Color("color(srgb 0.09e1 0 0)");
+        Assert.Equal(0.9, color.Coords[0], precision: 10);
+    }
 }
