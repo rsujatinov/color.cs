@@ -7,13 +7,13 @@ namespace Color.CS;
 public sealed record RGBColorSpaceOptions : ColorSpaceOptions
 {
     /// <summary>
-    /// Linearise a single gamma-encoded channel value (remove gamma).
+    /// Linearize a single gamma-encoded channel value (remove gamma).
     /// Applied to every channel when converting to the base space.
     /// </summary>
     public Func<double, double>? Lin { get; init; }
 
     /// <summary>
-    /// Apply gamma encoding to a single linearised channel value.
+    /// Apply gamma encoding to a single linearized channel value.
     /// Applied to every channel when converting from the base space.
     /// </summary>
     public Func<double, double>? Gam { get; init; }

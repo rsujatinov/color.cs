@@ -168,19 +168,22 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
 
     /// <summary>
     /// <c>true</c> if any coordinate has type <see cref="CoordType.Angle"/> (i.e. this is a polar space).
+    /// Computed once from the immutable <see cref="Coords"/> dictionary.
     /// </summary>
-    public bool IsPolar => Coords.Values.Any(static c => c.Type == CoordType.Angle);
+    public bool IsPolar { get; } = options.Coords.Values.Any(static c => c.Type == CoordType.Angle);
 
     /// <summary>
     /// <c>true</c> if no coordinate has a <see cref="CoordMetadata.Range"/> (all coords are unbounded).
+    /// Computed once from the immutable <see cref="Coords"/> dictionary.
     /// </summary>
-    public bool IsUnbounded => Coords.Values.All(static c => c.Range is null);
+    public bool IsUnbounded { get; } = options.Coords.Values.All(static c => c.Range is null);
 
     /// <summary>
     /// The space used for gamut checking. For polar spaces this is <see cref="Base"/> (or self when
     /// there is no base); for all other spaces it is <c>this</c>.
+    /// Computed once from the immutable <see cref="IsPolar"/> and <see cref="Base"/> values.
     /// </summary>
-    public ColorSpace GamutSpace => IsPolar ? (Base ?? this) : this;
+    public ColorSpace GamutSpace => field ??= IsPolar ? (Base ?? this) : this;
 
     /// <summary>
     /// Precomputed ancestry chain starting from <c>this</c> up to the root space
@@ -247,18 +250,16 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
         // Ascend: this → LCA, applying each space's ToBase.
         foreach (var space in srcPath)
         {
-            if (space.Equals(lca)) break;
+            if (ReferenceEquals(space, lca)) break;
             if (space.ToBase is { } toBase)
                 current = toBase(current);
         }
 
         // Descend: LCA → target, applying each space's FromBase in reverse order.
-        // dstPath[0..lcaInDst-1] = [target, Q1, ..., Q(k-1)]; reversed = [Q(k-1), ..., Q1, target].
-        var descent = dstPath.Take(lcaInDst).ToList();
-        descent.Reverse();
-        foreach (var space in descent)
+        // dstPath[0..lcaInDst-1] = [target, Q1, ..., Q(k-1)]; iterate in reverse (Q(k-1) → target).
+        for (var i = lcaInDst - 1; i >= 0; i--)
         {
-            if (space.FromBase is { } fromBase)
+            if (dstPath[i].FromBase is { } fromBase)
                 current = fromBase(current);
         }
 

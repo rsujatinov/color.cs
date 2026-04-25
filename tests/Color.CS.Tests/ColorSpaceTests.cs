@@ -618,7 +618,7 @@ public sealed class ColorSpaceTests
         {
             Id     = Uid("rgb-lin"),
             Name   = "RGB Lin",
-            Lin    = v => v * v,   // simple squaring as gamma linearisation
+            Lin    = v => v * v,   // simple squaring as gamma linearization
             Gam    = v => Math.Sqrt(v),
             Coords = new Dictionary<string, CoordMetadata>
             {
