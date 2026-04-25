@@ -285,7 +285,7 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
     public virtual bool InGamut(double[] coords, double epsilon = 0.000075)
     {
         // Polar spaces (and spaces with an explicit gamutSpace) delegate to their gamut space.
-        if (!Equals(GamutSpace))
+        if (!ReferenceEquals(this, GamutSpace))
         {
             var gamutCoords = To(GamutSpace, coords);
             return GamutSpace.InGamut(gamutCoords, epsilon);

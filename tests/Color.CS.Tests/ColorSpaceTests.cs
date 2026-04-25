@@ -809,6 +809,7 @@ public sealed class ColorSpaceTests
         double[] coords = [1.0, 0.0, 0.0];
         var result = ColorSpace.Srgb.To(ColorSpace.Srgb, coords);
         Assert.Equal(coords, result);
+        Assert.NotSame(coords, result);
     }
 
     // Ported: conversions.js — multi-hop conversion through a common ancestor.
