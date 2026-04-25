@@ -23,6 +23,12 @@ public sealed record Color
         init => field = double.IsNaN(value) ? value : Math.Clamp(value, 0.0, 1.0);
     }
 
+    /// <summary>
+    /// The metadata describing which CSS format was used to parse this color.
+    /// <c>null</c> when the color was not constructed from a CSS string.
+    /// </summary>
+    public ParseMeta? ParseMeta { get; init; }
+
     // ──────────────────────────────────────────────────────────────────────
     // Constructors
     // ──────────────────────────────────────────────────────────────────────
@@ -38,12 +44,15 @@ public sealed record Color
     public Color(ColorSpace space, ReadOnlySpan<double> coords, double alpha = 1.0)
         => (Space, Coords, Alpha) = (space, ImmutableArray.Create(coords), alpha);
 
-    /// <summary>Parses a CSS Color Level 4 string (currently supports the <c>color()</c> function).</summary>
-    /// <exception cref="FormatException">The string is not a supported CSS color format.</exception>
+    /// <summary>Parses a CSS Color Level 4 string.</summary>
+    /// <exception cref="FormatException">The string is not a recognized CSS color format.</exception>
     public Color(string cssString)
     {
-        var (space, coords, alpha) = CssColorParser.Parse(cssString);
-        (Space, Coords, Alpha) = (space, ImmutableArray.Create<double>(coords), alpha);
+        var result = CssColorParser.TryParse(cssString);
+        if (result is ParseResult.Failure failure)
+            throw new FormatException(failure.Error);
+        var s = (ParseResult.Success)result;
+        (Space, Coords, Alpha, ParseMeta) = (s.Space, s.Coords, s.Alpha, s.Meta);
     }
 
     /// <summary>Creates a <see cref="Color"/> from a <see cref="PlainColorObject"/>.</summary>
@@ -95,6 +104,13 @@ public sealed record Color
     // ──────────────────────────────────────────────────────────────────────
     // Static factory helpers
     // ──────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Attempts to parse a CSS Color Level 4 string without throwing.
+    /// Returns a <see cref="ParseResult.Success"/> on success or a
+    /// <see cref="ParseResult.Failure"/> with an error message on failure.
+    /// </summary>
+    public static ParseResult TryParseCss(string css) => CssColorParser.TryParse(css);
 
     /// <summary>
     /// Returns <paramref name="colorLike"/> unchanged if it is already a <see cref="Color"/>;

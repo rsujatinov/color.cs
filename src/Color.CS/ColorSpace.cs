@@ -97,6 +97,24 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
     /// <summary>Standard sRGB color space (D65 white point, gamma-encoded).</summary>
     public static readonly ColorSpace Srgb;
 
+    /// <summary>HSL color space (hue, saturation, lightness) based on sRGB.</summary>
+    public static readonly ColorSpace Hsl;
+
+    /// <summary>HWB color space (hue, whiteness, blackness) based on sRGB.</summary>
+    public static readonly ColorSpace Hwb;
+
+    /// <summary>CIE Lab color space (D50 white point).</summary>
+    public static readonly ColorSpace Lab;
+
+    /// <summary>CIE LCH color space (D50 white point).</summary>
+    public static readonly ColorSpace Lch;
+
+    /// <summary>OKLab color space (D65 white point).</summary>
+    public static readonly ColorSpace Oklab;
+
+    /// <summary>OKLCh color space (D65 white point).</summary>
+    public static readonly ColorSpace Oklch;
+
     static ColorSpace()
     {
         Srgb = new ColorSpace(new ColorSpaceOptions
@@ -110,8 +128,117 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
                 ["green"] = new() { Name = "Green", Range = new CoordRange(0, 1) },
                 ["blue"]  = new() { Name = "Blue",  Range = new CoordRange(0, 1) },
             },
+            Formats =
+            [
+                new() { Id = "srgb",  Type = "function" },
+                new() { Id = "rgb",   Type = "function",
+                    Coords = ["<number>[0,255] | <percentage>", "<number>[0,255] | <percentage>", "<number>[0,255] | <percentage>"] },
+                new() { Id = "rgba",  Type = "function", UseCommas = true,
+                    Coords = ["<number>[0,255] | <percentage>", "<number>[0,255] | <percentage>", "<number>[0,255] | <percentage>"] },
+                new() { Id = "hex",   Type = "custom" },
+            ],
         });
         Register(Srgb);
+
+        Hsl = new ColorSpace(new ColorSpaceOptions
+        {
+            Id = "hsl",
+            Name = "HSL",
+            White = "D65",
+            Coords = new Dictionary<string, CoordMetadata>
+            {
+                ["hue"]        = new() { Name = "Hue",        Type = CoordType.Angle, RefRange = new CoordRange(0, 360) },
+                ["saturation"] = new() { Name = "Saturation", Range = new CoordRange(0, 100) },
+                ["lightness"]  = new() { Name = "Lightness",  Range = new CoordRange(0, 100) },
+            },
+            Formats =
+            [
+                new() { Id = "hsl",  Type = "function",
+                    Coords = ["<number> | <angle>", "<percentage>", "<percentage>"] },
+                new() { Id = "hsla", Type = "function", UseCommas = true,
+                    Coords = ["<number> | <angle>", "<percentage>", "<percentage>"] },
+            ],
+        });
+        Register(Hsl);
+
+        Hwb = new ColorSpace(new ColorSpaceOptions
+        {
+            Id = "hwb",
+            Name = "HWB",
+            White = "D65",
+            Coords = new Dictionary<string, CoordMetadata>
+            {
+                ["hue"]       = new() { Name = "Hue",       Type = CoordType.Angle, RefRange = new CoordRange(0, 360) },
+                ["whiteness"] = new() { Name = "Whiteness", Range = new CoordRange(0, 100) },
+                ["blackness"] = new() { Name = "Blackness", Range = new CoordRange(0, 100) },
+            },
+            Formats =
+            [
+                new() { Id = "hwb", Type = "function",
+                    Coords = ["<number> | <angle>", "<percentage>", "<percentage>"] },
+            ],
+        });
+        Register(Hwb);
+
+        Lab = new ColorSpace(new ColorSpaceOptions
+        {
+            Id = "lab",
+            Name = "Lab",
+            White = "D50",
+            Coords = new Dictionary<string, CoordMetadata>
+            {
+                ["lightness"] = new() { Name = "Lightness", Range    = new CoordRange(0, 100) },
+                ["a"]         = new() { Name = "a",          RefRange = new CoordRange(-125, 125) },
+                ["b"]         = new() { Name = "b",          RefRange = new CoordRange(-125, 125) },
+            },
+            Formats = [new() { Id = "lab", Type = "function" }],
+        });
+        Register(Lab);
+
+        Lch = new ColorSpace(new ColorSpaceOptions
+        {
+            Id = "lch",
+            Name = "LCH",
+            White = "D50",
+            Coords = new Dictionary<string, CoordMetadata>
+            {
+                ["lightness"] = new() { Name = "Lightness", Range    = new CoordRange(0, 100) },
+                ["chroma"]    = new() { Name = "Chroma",    RefRange = new CoordRange(0, 150) },
+                ["hue"]       = new() { Name = "Hue",       Type = CoordType.Angle, RefRange = new CoordRange(0, 360) },
+            },
+            Formats = [new() { Id = "lch", Type = "function" }],
+        });
+        Register(Lch);
+
+        Oklab = new ColorSpace(new ColorSpaceOptions
+        {
+            Id = "oklab",
+            Name = "OKLab",
+            White = "D65",
+            Coords = new Dictionary<string, CoordMetadata>
+            {
+                ["lightness"] = new() { Name = "Lightness", Range    = new CoordRange(0, 1) },
+                ["a"]         = new() { Name = "a",          Range    = new CoordRange(-0.5, 0.5), RefRange = new CoordRange(-0.5, 0.5) },
+                ["b"]         = new() { Name = "b",          Range    = new CoordRange(-0.5, 0.5), RefRange = new CoordRange(-0.5, 0.5) },
+            },
+            Formats = [new() { Id = "oklab", Type = "function" }],
+        });
+        Register(Oklab);
+
+        Oklch = new ColorSpace(new ColorSpaceOptions
+        {
+            Id = "oklch",
+            Name = "OKLCh",
+            White = "D65",
+            Coords = new Dictionary<string, CoordMetadata>
+            {
+                ["lightness"] = new() { Name = "Lightness", Range    = new CoordRange(0, 1) },
+                ["chroma"]    = new() { Name = "Chroma",    RefRange = new CoordRange(0, 0.4) },
+                ["hue"]       = new() { Name = "Hue",       Type = CoordType.Angle, RefRange = new CoordRange(0, 360) },
+            },
+            Formats = [new() { Id = "oklch", Type = "function" }],
+        });
+        Register(Oklch);
     }
 
     // ── Instance properties ───────────────────────────────────────────────
