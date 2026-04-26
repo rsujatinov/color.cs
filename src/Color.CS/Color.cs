@@ -222,8 +222,11 @@ public sealed record Color
 
     private static string SerializeHex(double[] coords, double alpha)
     {
-        static int ToByte(double v) =>
-            (int)Math.Round(Math.Clamp(double.IsNaN(v) ? 0.0 : v, 0.0, 1.0) * 255.0);
+        static int ToByte(double v)
+        {
+            var clamped = double.IsNaN(v) ? 0.0 : Math.Clamp(v, 0.0, 1.0);
+            return (int)Math.Round(clamped * 255.0);
+        }
 
         var r = ToByte(coords.Length > 0 ? coords[0] : 0);
         var g = ToByte(coords.Length > 1 ? coords[1] : 0);
@@ -253,7 +256,10 @@ public sealed record Color
 
         for (var i = 0; i < coords.Length; i++)
         {
-            if (i > 0 || format.UseColorFunction)
+            // Need a separator before the first coordinate when the space id was already written,
+            // or before every subsequent coordinate in legacy function syntax.
+            var needsSeparator = i > 0 || format.UseColorFunction;
+            if (needsSeparator)
                 sb.Append(separator);
             var hint = format.Coords is not null && i < format.Coords.Count
                 ? format.Coords[i] : null;
