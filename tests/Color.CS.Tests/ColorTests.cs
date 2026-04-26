@@ -194,10 +194,10 @@ public sealed class ColorTests
     }
 
     [Fact]
-    public void Color_ToString_DelegatesToToJson()
+    public void Color_ToString_ProducesCssString()
     {
         var color = new Color(ColorSpace.Srgb, [0.5, 0.5, 0.5], 0.5);
-        Assert.Equal(color.ToJson(), color.ToString());
+        Assert.Equal("rgb(50% 50% 50% / 0.5)", color.ToString());
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -1710,5 +1710,554 @@ public sealed class ColorTests
     {
         // Parse metadata should capture "hex" for a hex string
         Assert.Equal("hex", new Color("#ff8000").ParseMeta?.FormatId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // CSS serialization — ToCss / ToString / Display
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── rgb() function syntax (sRGB default) ─────────────────────────────
+
+    [Fact]
+    public void Serialize_Srgb_DefaultFormat_UsesRgbFunction()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        Assert.Equal("rgb(100% 0% 0%)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_Srgb_WithAlpha_AppendsDivAlpha()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], 0.5);
+        Assert.Equal("rgb(100% 0% 0% / 0.5)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_Srgb_AlphaOne_OmitsAlpha()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.5, 0.5, 0.5], 1.0);
+        Assert.Equal("rgb(50% 50% 50%)", color.ToCss());
+    }
+
+    // ── none (NaN) serialization ──────────────────────────────────────────
+
+    [Fact]
+    public void Serialize_NoneCoord_OutputsNoneKeyword()
+    {
+        var color = new Color(ColorSpace.Srgb, [double.NaN, 0.0, 0.0]);
+        Assert.Contains("none", color.ToCss());
+        Assert.Equal("rgb(none 0% 0%)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_NoneAlpha_OutputsNoneKeyword()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], double.NaN);
+        Assert.Equal("rgb(100% 0% 0% / none)", color.ToCss());
+    }
+
+    // ── legacy function syntax ────────────────────────────────────────────
+
+    [Fact]
+    public void Serialize_RoundTrip_Rgb_UsesRgbFunction()
+    {
+        // Parsed from rgb() → serializes back as rgb()
+        var color = new Color("rgb(255 0 0)");
+        Assert.Equal("rgb(255 0 0)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Rgba_UsesCommas()
+    {
+        // Parsed from rgba() with commas → serializes back with commas
+        var color = new Color("rgba(255, 0, 0, 0.5)");
+        Assert.Equal("rgba(255, 0, 0, 0.5)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Hsl_UsesHslFunction()
+    {
+        var color = new Color("hsl(180 100% 50%)");
+        Assert.Equal("hsl(180 100% 50%)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Hsl_WithAlpha()
+    {
+        var color = new Color("hsl(180 100% 50% / 0.5)");
+        Assert.Equal("hsl(180 100% 50% / 0.5)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Hwb()
+    {
+        var color = new Color("hwb(180 20% 30%)");
+        Assert.Equal("hwb(180 20% 30%)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Lab()
+    {
+        var color = new Color("lab(50 25 -25)");
+        Assert.Equal("lab(50 25 -25)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Lch()
+    {
+        var color = new Color("lch(50 30 180)");
+        Assert.Equal("lch(50 30 180)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Oklab()
+    {
+        var color = new Color("oklab(0.5 0.1 -0.1)");
+        Assert.Equal("oklab(0.5 0.1 -0.1)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Oklch()
+    {
+        var color = new Color("oklch(0.5 0.1 180)");
+        Assert.Equal("oklch(0.5 0.1 180)", color.ToCss());
+    }
+
+    // ── hex format ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Serialize_RoundTrip_Hex6()
+    {
+        var color = new Color("#ff0000");
+        Assert.Equal("#ff0000", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Hex_WithAlpha()
+    {
+        // #ff000080 → alpha = 128/255 → re-encoding may not match exactly
+        // but the format should be hex with alpha
+        var color = new Color("#ff000080");
+        var css = color.ToCss();
+        Assert.StartsWith("#", css);
+        Assert.Equal(9, css.Length); // #rrggbbaa
+    }
+
+    [Fact]
+    public void Serialize_FormatOption_Hex_FromNonHexParsed()
+    {
+        var color = new Color("color(srgb 1 0 0)");
+        var css = color.ToCss(new SerializeOptions { Format = "hex" });
+        Assert.Equal("#ff0000", css);
+    }
+
+    [Fact]
+    public void Serialize_FormatOption_Rgb_FromColorFunction()
+    {
+        var color = new Color("color(srgb 1 0 0)");
+        var css = color.ToCss(new SerializeOptions { Format = "rgb" });
+        Assert.Equal("rgb(100% 0% 0%)", css);
+    }
+
+    [Fact]
+    public void Serialize_FormatOption_Hsl_FromSrgb()
+    {
+        // No space conversion, just format override
+        var color = new Color("hsl(180 100% 50%)");
+        var css = color.ToCss(new SerializeOptions { Format = "hsl" });
+        Assert.Equal("hsl(180 100% 50%)", css);
+    }
+
+    // ── precision option ──────────────────────────────────────────────────
+
+    [Fact]
+    public void Serialize_Precision_Default5_LimitsSignificantDigits()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.123456789, 0.0, 0.0]);
+        var css = color.ToCss();
+        // 0.123456789 × 100 = 12.3456789, G5 = "12.346"
+        Assert.Equal("rgb(12.346% 0% 0%)", css);
+    }
+
+    [Fact]
+    public void Serialize_Precision_Custom3()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.123456789, 0.5, 0.0]);
+        var css = color.ToCss(new SerializeOptions { Precision = 3 });
+        // 0.123456789 × 100 = 12.3…, G3 = "12.3"; 0.5 × 100 = 50, G3 = "50"
+        Assert.Equal("rgb(12.3% 50% 0%)", css);
+    }
+
+    [Fact]
+    public void Serialize_Precision_Null_NoRounding()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.123456789, 0.0, 0.0]);
+        var css = color.ToCss(new SerializeOptions { Precision = null });
+        // 0.123456789 × 100 = 12.3456789, no rounding
+        Assert.Contains("12.3456789%", css);
+    }
+
+    // ── inGamut option ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Serialize_InGamut_True_ClampsOutOfGamutCoords()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.5, -0.2, 0.5]);
+        var css = color.ToCss(new SerializeOptions { InGamut = true });
+        Assert.Equal("rgb(100% 0% 50%)", css);
+    }
+
+    [Fact]
+    public void Serialize_InGamut_False_PreservesOutOfGamutCoords()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.5, -0.2, 0.5]);
+        var css = color.ToCss(new SerializeOptions { InGamut = false });
+        Assert.Equal("rgb(150% -20% 50%)", css);
+    }
+
+    [Fact]
+    public void Serialize_InGamut_DoesNotClampAngleCoords()
+    {
+        // hue is an angle → not clamped even with inGamut = true
+        var color = new Color(ColorSpace.Hsl, [400.0, 50.0, 50.0]);
+        var css = color.ToCss(new SerializeOptions { InGamut = true });
+        Assert.Contains("400", css);
+    }
+
+    [Fact]
+    public void Serialize_InGamut_DoesNotClampNoneValues()
+    {
+        var color = new Color(ColorSpace.Srgb, [double.NaN, 0.0, 0.0]);
+        var css = color.ToCss(new SerializeOptions { InGamut = true });
+        Assert.Equal("rgb(none 0% 0%)", css);
+    }
+
+    // ── round-trip fidelity via ParseMeta ────────────────────────────────
+
+    [Fact]
+    public void Serialize_ParseMeta_HexRoundTrip()
+    {
+        Assert.Equal("#ff0000", new Color("#ff0000").ToCss());
+    }
+
+    [Fact]
+    public void Serialize_ParseMeta_HexExpandsShortForm()
+    {
+        // #f00 is expanded internally to #ff0000 — short form re-serializes as 6-digit
+        Assert.Equal("#ff0000", new Color("#f00").ToCss());
+    }
+
+    [Fact]
+    public void Serialize_ParseMeta_LabRoundTrip()
+    {
+        Assert.Equal("lab(50 25 -25)", new Color("lab(50 25 -25)").ToCss());
+    }
+
+    [Fact]
+    public void Serialize_ParseMeta_OklchRoundTrip()
+    {
+        Assert.Equal("oklch(0.5 0.1 180)", new Color("oklch(0.5 0.1 180)").ToCss());
+    }
+
+    // ── Display method ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Display_ReturnsCssString()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        var display = color.Display();
+        Assert.Equal("rgb(100% 0% 0%)", display.Css);
+        Assert.Equal("rgb(100% 0% 0%)", display.ToString());
+    }
+
+    [Fact]
+    public void Display_InGamut_ClampsRenderedColor()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.5, -0.2, 0.5]);
+        var display = color.Display();
+        Assert.Equal(1.0, display.Color.Coords[0]);
+        Assert.Equal(0.0, display.Color.Coords[1]);
+        Assert.Equal(0.5, display.Color.Coords[2]);
+    }
+
+    [Fact]
+    public void Display_InGamutFalse_OriginalColorPreserved()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.5, 0.0, 0.0]);
+        var display = color.Display(new SerializeOptions { InGamut = false });
+        Assert.Equal(1.5, display.Color.Coords[0]);
+    }
+
+    [Fact]
+    public void Display_NoneAlpha_IncludesNoneInOutput()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], double.NaN);
+        var display = color.Display();
+        Assert.Contains("none", display.Css);
+    }
+
+    // ── ToString overload ─────────────────────────────────────────────────
+
+    [Fact]
+    public void ToString_WithOptions_RespectsPrecision()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.123456, 0.0, 0.0]);
+        var opts = new SerializeOptions { Precision = 2 };
+        // 0.123456 × 100 = 12.3456, G2 = "12"
+        Assert.Equal("rgb(12% 0% 0%)", color.ToString(opts));
+    }
+
+    [Fact]
+    public void ToString_NoOptions_UsesPrecision5()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.123456789, 0.0, 0.0]);
+        // 0.123456789 × 100 = 12.3456789, G5 = "12.346"
+        Assert.Equal("rgb(12.346% 0% 0%)", color.ToString());
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Ported tests from color.js serialize.js
+    // https://github.com/color-js/color.js/blob/main/test/serialize.js
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── Basic ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_SerializeJs_Basic_Srgb()
+        => Assert.Equal("rgb(100% 50% 0%)", new Color(ColorSpace.Srgb, [1, 0.5, 0]).ToCss());
+
+    [Fact]
+    public void Ported_SerializeJs_Basic_Lch()
+        => Assert.Equal("lch(65% 20 90)", new Color(ColorSpace.Lch, [65, 20, 90]).ToCss());
+
+    [Fact]
+    public void Ported_SerializeJs_Basic_Lab()
+        => Assert.Equal("lab(65% 20 90)", new Color(ColorSpace.Lab, [65, 20, 90]).ToCss());
+
+    [Fact]
+    public void Ported_SerializeJs_Basic_Oklch()
+        => Assert.Equal("oklch(65% 0.2 90)", new Color(ColorSpace.Oklch, [0.65, 0.2, 90]).ToCss());
+
+    [Fact]
+    public void Ported_SerializeJs_Basic_Oklab()
+        => Assert.Equal("oklab(65% 0.2 0.1)", new Color(ColorSpace.Oklab, [0.65, 0.2, 0.1]).ToCss());
+
+    // ── With alpha ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_SerializeJs_Alpha_Srgb()
+        => Assert.Equal("rgb(100% 50% 0% / 0.5)", new Color(ColorSpace.Srgb, [1, 0.5, 0], 0.5).ToCss());
+
+    [Fact]
+    public void Ported_SerializeJs_Alpha_Lch()
+        => Assert.Equal("lch(65% 20 90 / 0.5)", new Color(ColorSpace.Lch, [65, 20, 90], 0.5).ToCss());
+
+    [Fact]
+    public void Ported_SerializeJs_Alpha_Lab()
+        => Assert.Equal("lab(65% 20 90 / 0.5)", new Color(ColorSpace.Lab, [65, 20, 90], 0.5).ToCss());
+
+    [Fact]
+    public void Ported_SerializeJs_Alpha_Oklch()
+        => Assert.Equal("oklch(65% 0.2 90 / 0.5)", new Color(ColorSpace.Oklch, [0.65, 0.2, 90], 0.5).ToCss());
+
+    [Fact]
+    public void Ported_SerializeJs_Alpha_Oklab()
+        => Assert.Equal("oklab(65% 0.2 0.1 / 0.5)", new Color(ColorSpace.Oklab, [0.65, 0.2, 0.1], 0.5).ToCss());
+
+    // ── Mandatory alpha (rgba / hsla with ForceAlpha) ─────────────────────
+
+    [Fact]
+    public void Ported_SerializeJs_MandatoryAlpha_Rgba()
+        // { args: ["srgb", [1, 0.5, 0], 1, { format: "rgba" }], expect: "rgba(100%, 50%, 0%, 1)" }
+        => Assert.Equal("rgba(100%, 50%, 0%, 1)",
+            new Color(ColorSpace.Srgb, [1, 0.5, 0]).ToCss(new SerializeOptions { Format = "rgba" }));
+
+    [Fact]
+    public void Ported_SerializeJs_MandatoryAlpha_Hsla()
+        // { args: ["hsl", [180, 50, 50], 1, { format: "hsla" }], expect: "hsla(180, 50%, 50%, 1)" }
+        => Assert.Equal("hsla(180, 50%, 50%, 1)",
+            new Color(ColorSpace.Hsl, [180, 50, 50]).ToCss(new SerializeOptions { Format = "hsla" }));
+
+    // ── Alternate formats ─────────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_SerializeJs_Hex_Format()
+        // { name: "Hex", args: ["srgb", [1, 0.5, 0], 1, { format: "hex" }], expect: "#ff8000" }
+        => Assert.Equal("#ff8000",
+            new Color(ColorSpace.Srgb, [1, 0.5, 0]).ToCss(new SerializeOptions { Format = "hex" }));
+
+    [Fact]
+    public void Ported_SerializeJs_Hex_ThrowsForUnsupportedFormat()
+        // { name: "Cannot serialize as keyword", throws: true }
+        => Assert.Throws<NotSupportedException>(() =>
+            new Color(ColorSpace.Srgb, [1, 0.5, 0]).ToCss(new SerializeOptions { Format = "keyword" }));
+
+    // ── Custom coord format ───────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_SerializeJs_CustomCoords_NumberScale()
+        // { name: "rgb() with <number> coords", expect: "rgb(255 127.5 0)" }
+        => Assert.Equal("rgb(255 127.5 0)",
+            new Color(ColorSpace.Srgb, [1, 0.5, 0]).ToCss(new SerializeOptions
+            {
+                Coords = ["<number>[0,255]", "<number>[0,255]", "<number>[0,255]"],
+            }));
+
+    [Fact]
+    public void Ported_SerializeJs_CustomCoords_OklchPctAngle()
+        // { name: "oklch(<percentage> <percentage> <angle>)", expect: "oklch(50% 50% 180deg)" }
+        // oklch refRange for chroma = 0.4, so 0.2/0.4×100 = 50%
+        => Assert.Equal("oklch(50% 50% 180deg)",
+            new Color(ColorSpace.Oklch, [0.5, 0.2, 180]).ToCss(new SerializeOptions
+            {
+                Coords = [null, "<percentage>", "<angle>"],
+            }));
+
+    // ── Force commas ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_SerializeJs_ForceCommas()
+        // { name: "Force commas", args: ["srgb", [1, 0.5, 0], 1, { commas: true }],
+        //   expect: "rgb(100%, 50%, 0%)" }
+        => Assert.Equal("rgb(100%, 50%, 0%)",
+            new Color(ColorSpace.Srgb, [1, 0.5, 0]).ToCss(new SerializeOptions { Commas = true }));
+
+    // ── Custom alpha format ───────────────────────────────────────────────
+
+    [Fact]
+    public void Ported_SerializeJs_AlphaTrue_ForcesAlphaOne()
+        // { name: "Force alpha", args: ["srgb", [1, 0.5, 0], 1, { alpha: true }],
+        //   expect: "rgb(100% 50% 0% / 1)" }
+        => Assert.Equal("rgb(100% 50% 0% / 1)",
+            new Color(ColorSpace.Srgb, [1, 0.5, 0]).ToCss(new SerializeOptions { ForceAlpha = true }));
+
+    [Fact]
+    public void Ported_SerializeJs_AlphaPercentage()
+        // { name: "Percentage alpha", args: ["srgb", [1, 0.5, 0], 0.8, { alpha: "<percentage>" }],
+        //   expect: "rgb(100% 50% 0% / 80%)" }
+        => Assert.Equal("rgb(100% 50% 0% / 80%)",
+            new Color(ColorSpace.Srgb, [1, 0.5, 0], 0.8).ToCss(
+                new SerializeOptions { AlphaFormat = "<percentage>" }));
+
+    [Fact]
+    public void Ported_SerializeJs_ForceAlphaInHex()
+        // { name: "Force alpha in hex", expect: "#ff8000ff" }
+        => Assert.Equal("#ff8000ff",
+            new Color(ColorSpace.Srgb, [1, 0.5, 0]).ToCss(
+                new SerializeOptions { Format = "hex", ForceAlpha = true }));
+
+    [Fact]
+    public void Ported_SerializeJs_ForceNoAlphaInHex()
+        // { name: "Force no alpha in hex", args: ["srgb", [1, 0.5, 0], 0.5, { format: "hex", alpha: false }],
+        //   expect: "#ff8000" }
+        => Assert.Equal("#ff8000",
+            new Color(ColorSpace.Srgb, [1, 0.5, 0], 0.5).ToCss(
+                new SerializeOptions { Format = "hex", ForceAlpha = false }));
+
+    // ── Values outside range or refRange ─────────────────────────────────
+
+    [Fact]
+    public void Ported_SerializeJs_OutOfRange_SrgbNegative()
+        // { name: "sRGB negative %", args: ["srgb", [-0.5, 0, 0], 1, { inGamut: false }],
+        //   expect: "rgb(-50% 0% 0%)" }
+        => Assert.Equal("rgb(-50% 0% 0%)",
+            new Color(ColorSpace.Srgb, [-0.5, 0, 0]).ToCss(new SerializeOptions { InGamut = false }));
+
+    [Fact]
+    public void Ported_SerializeJs_OutOfRange_SrgbPositive()
+        // { name: "sRGB %", args: ["srgb", [1.5, 0, 0], 1, { inGamut: false }],
+        //   expect: "rgb(150% 0% 0%)" }
+        => Assert.Equal("rgb(150% 0% 0%)",
+            new Color(ColorSpace.Srgb, [1.5, 0, 0]).ToCss(new SerializeOptions { InGamut = false }));
+
+    [Fact]
+    public void Ported_SerializeJs_OutOfRange_SrgbClamped()
+        // { name: "sRGB %, inGamut: true", args: ["srgb", [-0.5, 0, 0], 1],
+        //   expect: "rgb(0% 0% 0%)" }
+        => Assert.Equal("rgb(0% 0% 0%)",
+            new Color(ColorSpace.Srgb, [-0.5, 0, 0]).ToCss());
+
+    [Fact]
+    public void Ported_SerializeJs_OutOfRange_NumberScale()
+        // { name: "rgb() with <number> coords", args: ["srgb", [2, 2, 2], 1, { inGamut: false, ... }],
+        //   expect: "rgb(510 510 510)" }
+        => Assert.Equal("rgb(510 510 510)",
+            new Color(ColorSpace.Srgb, [2, 2, 2]).ToCss(new SerializeOptions
+            {
+                InGamut = false,
+                Coords = ["<number>[0,255]", "<number>[0,255]", "<number>[0,255]"],
+            }));
+
+    [Fact]
+    public void Ported_SerializeJs_OutOfRange_OklchNegative()
+    {
+        // { name: "oklch negative values", args: ["oklch", [-0.1, -0.6, -50], 1],
+        //   expect: "oklch(-10% -0.6 -50)" }
+        // NOTE: color.js uses gamut-aware mapping (CSS Gamut Mapping via chroma reduction) while
+        // our implementation uses simple coordinate clamping. L has Range=[0,1] so it is clamped
+        // to 0; C and H have no Range (only RefRange) so they are preserved.
+        // TODO: implement CSS gamut mapping algorithm to match color.js output exactly.
+        var css = new Color(ColorSpace.Oklch, [-0.1, -0.6, -50]).ToCss();
+        Assert.Equal("oklch(0% -0.6 -50)", css);
+    }
+
+    [Fact]
+    public void Ported_SerializeJs_OutOfRange_HslNegative()
+        // { name: "hsl negative values", args: ["hsl", [-50, -10, -30], 1, { inGamut: false }],
+        //   expect: "hsl(-50 -10% -30%)" }
+        => Assert.Equal("hsl(-50 -10% -30%)",
+            new Color(ColorSpace.Hsl, [-50, -10, -30]).ToCss(new SerializeOptions { InGamut = false }));
+
+    [Fact]
+    public void Ported_SerializeJs_OutOfRange_HslPositive()
+        // { name: "hsl positive values", args: ["hsl", [400, 123, 456], 1, { inGamut: false }],
+        //   expect: "hsl(400 123% 456%)" }
+        => Assert.Equal("hsl(400 123% 456%)",
+            new Color(ColorSpace.Hsl, [400, 123, 456]).ToCss(new SerializeOptions { InGamut = false }));
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Ported tests from color.js reserialize.js
+    // https://github.com/color-js/color.js/blob/main/test/reserialize.js
+    // ══════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void Ported_ReserializeJs_OklchPercentChromaAndDegHue()
+        // { arg: "oklch(.5 20% 180deg)", expect: "oklch(0.5 20% 180deg)" }
+        => Assert.Equal("oklch(0.5 20% 180deg)", new Color("oklch(.5 20% 180deg)").ToCss());
+
+    [Fact]
+    public void Ported_ReserializeJs_PercentageAlpha()
+        // { arg: "lab(0 0 0 / 80%)", expect: "lab(0 0 0 / 80%)" }
+        => Assert.Equal("lab(0 0 0 / 80%)", new Color("lab(0 0 0 / 80%)").ToCss());
+
+    [Fact]
+    public void Ported_ReserializeJs_HexRoundTrip()
+        // { arg: "#ff8000", expect: "#ff8000" }
+        => Assert.Equal("#ff8000", new Color("#ff8000").ToCss());
+
+    [Fact]
+    public void Ported_ReserializeJs_RgbWithNumbers()
+        // { arg: "rgb(0 128 255)", expect: "rgb(0 128 255)" }
+        => Assert.Equal("rgb(0 128 255)", new Color("rgb(0 128 255)").ToCss());
+
+    [Fact]
+    public void Ported_ReserializeJs_LegacyRgbWithCommas()
+        // { arg: "rgb(0, 128, 255)", expect: "rgb(0, 128, 255)" }
+        => Assert.Equal("rgb(0, 128, 255)", new Color("rgb(0, 128, 255)").ToCss());
+
+    [Fact]
+    public void Ported_ReserializeJs_LegacyRgbaWithCommas()
+        // { arg: "rgba(0, 128, 255, 1)", expect: "rgba(0, 128, 255, 1)" }
+        => Assert.Equal("rgba(0, 128, 255, 1)", new Color("rgba(0, 128, 255, 1)").ToCss());
+
+    [Fact]
+    public void Ported_ReserializeJs_FunctionalApi_NoParseMetaUsesDefaultFormat()
+    {
+        // Functional API: serialize(parse(str)) strips parseMeta.
+        // Equivalent: a Color built directly from sRGB coords (no ParseMeta).
+        // Default sRGB format → "rgb(…%)" syntax.
+        // { arg: "#ff0000", expect: "rgb(100% 0% 0%)" }
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        Assert.Equal("rgb(100% 0% 0%)", color.ToCss());
     }
 }

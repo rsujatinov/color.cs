@@ -130,12 +130,15 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
             },
             Formats =
             [
-                new() { Id = "srgb",  Type = "function" },
-                new() { Id = "rgb",   Type = "function",
-                    Coords = ["<number>[0,255] | <percentage>", "<number>[0,255] | <percentage>", "<number>[0,255] | <percentage>"] },
-                new() { Id = "rgba",  Type = "function", UseCommas = true,
-                    Coords = ["<number>[0,255] | <percentage>", "<number>[0,255] | <percentage>", "<number>[0,255] | <percentage>"] },
-                new() { Id = "hex",   Type = "custom" },
+                // "rgb" is first → default output format (percentage-based)
+                new() { Id = "rgb",        Type = "function",
+                    Coords = ["<percentage>", "<percentage>", "<percentage>"] },
+                new() { Id = "rgba",       Type = "function", UseCommas = true, ForceAlpha = true,
+                    Coords = ["<percentage>", "<percentage>", "<percentage>"] },
+                // "rgb_number": legacy comma-separated rgb with [0,255] numbers; CSS func name is "rgb"
+                new() { Id = "rgb_number", Name = "rgb", Type = "function", UseCommas = true },
+                new() { Id = "srgb",       Type = "function", UseColorFunction = true },
+                new() { Id = "hex",        Type = "custom" },
             ],
         });
         Register(Srgb);
@@ -155,7 +158,7 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
             [
                 new() { Id = "hsl",  Type = "function",
                     Coords = ["<number> | <angle>", "<percentage>", "<percentage>"] },
-                new() { Id = "hsla", Type = "function", UseCommas = true,
+                new() { Id = "hsla", Type = "function", UseCommas = true, ForceAlpha = true,
                     Coords = ["<number> | <angle>", "<percentage>", "<percentage>"] },
             ],
         });
@@ -191,7 +194,8 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
                 ["a"]         = new() { Name = "a",          RefRange = new CoordRange(-125, 125) },
                 ["b"]         = new() { Name = "b",          RefRange = new CoordRange(-125, 125) },
             },
-            Formats = [new() { Id = "lab", Type = "function" }],
+            Formats = [new() { Id = "lab", Type = "function",
+                Coords = ["<percentage>", null, null] }],
         });
         Register(Lab);
 
@@ -206,7 +210,8 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
                 ["chroma"]    = new() { Name = "Chroma",    RefRange = new CoordRange(0, 150) },
                 ["hue"]       = new() { Name = "Hue",       Type = CoordType.Angle, RefRange = new CoordRange(0, 360) },
             },
-            Formats = [new() { Id = "lch", Type = "function" }],
+            Formats = [new() { Id = "lch", Type = "function",
+                Coords = ["<percentage>", null, null] }],
         });
         Register(Lch);
 
@@ -222,7 +227,8 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
                 ["a"]         = new() { Name = "a",          RefRange = new CoordRange(-0.4, 0.4) },
                 ["b"]         = new() { Name = "b",          RefRange = new CoordRange(-0.4, 0.4) },
             },
-            Formats = [new() { Id = "oklab", Type = "function" }],
+            Formats = [new() { Id = "oklab", Type = "function",
+                Coords = ["<percentage>", null, null] }],
         });
         Register(Oklab);
 
@@ -237,7 +243,8 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
                 ["chroma"]    = new() { Name = "Chroma",    RefRange = new CoordRange(0, 0.4) },
                 ["hue"]       = new() { Name = "Hue",       Type = CoordType.Angle, RefRange = new CoordRange(0, 360) },
             },
-            Formats = [new() { Id = "oklch", Type = "function" }],
+            Formats = [new() { Id = "oklch", Type = "function",
+                Coords = ["<percentage>", null, null] }],
         });
         Register(Oklch);
     }
