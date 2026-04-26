@@ -111,8 +111,14 @@ public sealed record Color
     /// <summary>
     /// Returns a new <see cref="Color"/> with the coordinate identified by
     /// <paramref name="coordRef"/> set to <paramref name="value"/>.
+    /// Passing <c>"alpha"</c> updates the <see cref="Alpha"/> channel.
     /// </summary>
-    public Color Set(string coordRef, double value)
+    public Color Set(string coordRef, double value) =>
+        string.Equals(coordRef, "alpha", StringComparison.OrdinalIgnoreCase)
+            ? this with { Alpha = value }
+            : SetCoord(coordRef, value);
+
+    private Color SetCoord(string coordRef, double value)
     {
         var (space, _, index) = ColorSpace.ResolveCoord(coordRef, Space);
         var coords = GetAll(space);
