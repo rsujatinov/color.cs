@@ -42,6 +42,14 @@ internal static class CssColorParser
             };
         }
 
+        // Named color keywords (e.g. "red", "transparent")
+        var keyword = s.ToString();
+        if (keyword.Equals("currentcolor", StringComparison.OrdinalIgnoreCase))
+            return ParseResult.Fail("'currentcolor' is context-dependent and cannot be resolved to fixed coordinates.");
+
+        if (ColorKeywords.TryGetColor(keyword, out var namedColor))
+            return ParseResult.Ok(ColorSpace.Srgb, namedColor.Coords.AsSpan(), namedColor.Alpha, "keyword");
+
         return ParseResult.Fail($"Unsupported CSS color format: '{css}'.");
     }
 
