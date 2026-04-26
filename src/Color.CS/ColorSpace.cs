@@ -346,6 +346,60 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
     /// </summary>
     public int CoordIndex(string channelName) => Channels.IndexOf(channelName);
 
+    /// <summary>
+    /// Resolves a coordinate reference string to a <see cref="CoordRef"/>.
+    /// <para>
+    /// The reference may be an absolute <c>"space.coord"</c> (e.g. <c>"lch.l"</c>) or a bare
+    /// channel name / display name (e.g. <c>"l"</c> or <c>"Lightness"</c>), in which case
+    /// <paramref name="workingSpace"/> is used as the default space.
+    /// </para>
+    /// </summary>
+    /// <param name="coordRef">
+    /// Coordinate reference: <c>"space.coord"</c> or bare <c>"coord"</c>.
+    /// </param>
+    /// <param name="workingSpace">
+    /// Default color space used when <paramref name="coordRef"/> does not contain a space prefix.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// The space or coordinate cannot be resolved.
+    /// </exception>
+    public static CoordRef ResolveCoord(string coordRef, ColorSpace? workingSpace = null)
+    {
+        ColorSpace? space;
+        string coord;
+
+        var dotIdx = coordRef.IndexOf('.');
+        if (dotIdx >= 0)
+        {
+            space = Get(coordRef[..dotIdx]);
+            coord = coordRef[(dotIdx + 1)..];
+        }
+        else
+        {
+            space = workingSpace;
+            coord = coordRef;
+        }
+
+        if (space is null)
+            throw new ArgumentException(
+                $"Cannot resolve coordinate '{coordRef}': no color space specified and relative references are not allowed here.",
+                nameof(coordRef));
+
+        var channels = space.Channels;
+        for (var i = 0; i < channels.Length; i++)
+        {
+            var channelId = channels[i];
+            if (string.Equals(channelId, coord, StringComparison.OrdinalIgnoreCase) ||
+                (space.Coords.TryGetValue(channelId, out var meta) &&
+                 string.Equals(meta.Name, coord, StringComparison.OrdinalIgnoreCase)))
+                return new CoordRef(space, channelId, i);
+        }
+
+        throw new ArgumentException(
+            $"No '{coord}' coordinate found in {space.Name}. Its coordinates are: {string.Join(", ", channels)}.",
+            nameof(coordRef));
+    }
+
     // ── Conversion ────────────────────────────────────────────────────────
 
     /// <summary>

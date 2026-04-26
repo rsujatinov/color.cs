@@ -6,6 +6,53 @@ namespace Color.CS.Tests;
 public sealed class ColorTests
 {
     // ──────────────────────────────────────────────────────────────────────
+    // Helpers for cross-space tests (custom spaces, unique IDs)
+    // ──────────────────────────────────────────────────────────────────────
+
+    private static string Uid(string tag) => $"test-color-{tag}-{Guid.NewGuid():N}";
+
+    /// <summary>
+    /// Creates and registers a pair of spaces where <c>derived</c> stores coords scaled by
+    /// <paramref name="scale"/> relative to <c>root</c>. Conversion: derived→root multiplies by
+    /// scale, root→derived divides by scale.
+    /// </summary>
+    private static (ColorSpace Root, ColorSpace Derived) MakeScaledSpacePair(double scale)
+    {
+        var rootId    = Uid("root");
+        var derivedId = Uid("derived");
+
+        var root = new ColorSpace(new ColorSpaceOptions
+        {
+            Id   = rootId,
+            Name = rootId,
+            Coords = new Dictionary<string, CoordMetadata>
+            {
+                ["x"] = new() { Name = "X" },
+                ["y"] = new() { Name = "Y" },
+                ["z"] = new() { Name = "Z" },
+            },
+        });
+        ColorSpace.Register(root);
+
+        var derived = new ColorSpace(new ColorSpaceOptions
+        {
+            Id     = derivedId,
+            Name   = derivedId,
+            Base   = root,
+            ToBase   = c => c.Select(v => v * scale).ToArray(),
+            FromBase = c => c.Select(v => v / scale).ToArray(),
+            Coords = new Dictionary<string, CoordMetadata>
+            {
+                ["x"] = new() { Name = "X" },
+                ["y"] = new() { Name = "Y" },
+                ["z"] = new() { Name = "Z" },
+            },
+        });
+        ColorSpace.Register(derived);
+
+        return (root, derived);
+    }
+    // ──────────────────────────────────────────────────────────────────────
     // Existing baseline tests
     // ──────────────────────────────────────────────────────────────────────
 
@@ -2440,5 +2487,317 @@ public sealed class ColorTests
         Assert.Equal(r / 255.0, color.Coords[0], precision: 10);
         Assert.Equal(g / 255.0, color.Coords[1], precision: 10);
         Assert.Equal(b / 255.0, color.Coords[2], precision: 10);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // GetAll
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetAll_SameSpace_ReturnsCopy()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.2, 0.4, 0.6]);
+        var coords = color.GetAll(ColorSpace.Srgb);
+        Assert.Equal([0.2, 0.4, 0.6], coords);
+        // Mutating the returned array must not affect the original
+        coords[0] = 0.9;
+        Assert.Equal(0.2, color.Coords[0]);
+    }
+
+    [Fact]
+    public void GetAll_DifferentSpace_ConvertsCoords()
+    {
+        var (root, derived) = MakeScaledSpacePair(2.0);
+        // derived coords [1, 2, 3] → root should be [2, 4, 6]
+        var color = new Color(derived, [1.0, 2.0, 3.0]);
+        var rootCoords = color.GetAll(root);
+        Assert.Equal([2.0, 4.0, 6.0], rootCoords);
+    }
+
+    [Fact]
+    public void GetAll_DoesNotMutateColor()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        var coords = color.GetAll(ColorSpace.Srgb);
+        coords[0] = 0.5;
+        Assert.Equal(1.0, color.Coords[0]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Get(string coordRef)
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Get_AbsoluteRef_SameSpace_ReturnsValue()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.8, 0.4, 0.2]);
+        Assert.Equal(0.8, color.Get("srgb.red"));
+        Assert.Equal(0.4, color.Get("srgb.green"));
+        Assert.Equal(0.2, color.Get("srgb.blue"));
+    }
+
+    [Fact]
+    public void Get_RelativeRef_ReturnsValue()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.8, 0.4, 0.2]);
+        Assert.Equal(0.8, color.Get("red"));
+        Assert.Equal(0.4, color.Get("green"));
+    }
+
+    [Fact]
+    public void Get_AbsoluteRef_DifferentSpace_ConvertsAndReturns()
+    {
+        // derived coord [4.0, ...] in a 2x scale space → root x = 8.0
+        var (root, derived) = MakeScaledSpacePair(2.0);
+        var color = new Color(derived, [4.0, 0.0, 0.0]);
+        var x = color.Get($"{root.Id}.x");
+        Assert.Equal(8.0, x, precision: 10);
+    }
+
+    [Fact]
+    public void Get_Alpha_ReturnsAlpha()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], 0.5);
+        Assert.Equal(0.5, color.Get("alpha"));
+    }
+
+    [Fact]
+    public void Get_Alpha_CaseInsensitive()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], 0.75);
+        Assert.Equal(0.75, color.Get("Alpha"));
+        Assert.Equal(0.75, color.Get("ALPHA"));
+    }
+
+    [Fact]
+    public void Get_NoneCoord_ReturnsNaN()
+    {
+        var color = new Color(ColorSpace.Srgb, [double.NaN, 0.0, 0.0]);
+        Assert.True(double.IsNaN(color.Get("red")));
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Set(string coordRef, double value)
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Set_ByValue_SameSpace_ReturnsNewColor()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        var updated = color.Set("srgb.red", 0.5);
+        Assert.Equal(0.5, updated.Coords[0]);
+        // Original is unchanged
+        Assert.Equal(1.0, color.Coords[0]);
+    }
+
+    [Fact]
+    public void Set_ByValue_RelativeRef_SameSpace()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        var updated = color.Set("green", 0.75);
+        Assert.Equal(0.75, updated.Coords[1]);
+        Assert.Equal(1.0, updated.Coords[0]); // red unchanged
+    }
+
+    [Fact]
+    public void Set_ByValue_DifferentSpace_RoundTrips()
+    {
+        // derived = 2× root (ToBase: ×2, FromBase: ÷2)
+        // color in derived [2,2,2] → root [4,4,4]
+        // set root.x = 10 → root [10,4,4] → back to derived [5,2,2]
+        var (root, derived) = MakeScaledSpacePair(2.0);
+        var color   = new Color(derived, [2.0, 2.0, 2.0]);
+        var updated = color.Set($"{root.Id}.x", 10.0);
+        Assert.Equal(derived, updated.Space);
+        Assert.Equal(5.0, updated.Coords[0], precision: 10);
+        Assert.Equal(2.0, updated.Coords[1], precision: 10);
+    }
+
+    [Fact]
+    public void Set_ByValue_IsImmutable()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        _ = color.Set("red", 0.5);
+        Assert.Equal(1.0, color.Coords[0]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Set(string coordRef, Func<double, double> transform)
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Set_ByTransform_DoublesValue()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.4, 0.2, 0.1]);
+        var updated = color.Set("red", v => v * 2);
+        Assert.Equal(0.8, updated.Coords[0], precision: 10);
+    }
+
+    [Fact]
+    public void Set_ByTransform_ReceivesCurrentValue()
+    {
+        double? captured = null;
+        var color = new Color(ColorSpace.Srgb, [0.3, 0.0, 0.0]);
+        color.Set("red", v => { captured = v; return v; });
+        Assert.Equal(0.3, captured!.Value, precision: 10);
+    }
+
+    [Fact]
+    public void Set_ByTransform_DifferentSpace()
+    {
+        // derived = 2× root; color in derived [2,2,2] → double root.x (4→8) → derived x = 8/2 = 4
+        var (root, derived) = MakeScaledSpacePair(2.0);
+        var color   = new Color(derived, [2.0, 2.0, 2.0]);
+        var updated = color.Set($"{root.Id}.x", v => v * 2);
+        Assert.Equal(4.0, updated.Coords[0], precision: 10);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // SetAll
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void SetAll_MultipleCoords_AppliesAll()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        var updated = color.SetAll(new Dictionary<string, object>
+        {
+            ["green"] = 0.5,
+            ["blue"]  = 0.25,
+        });
+        Assert.Equal(1.0, updated.Coords[0]);
+        Assert.Equal(0.5, updated.Coords[1]);
+        Assert.Equal(0.25, updated.Coords[2]);
+    }
+
+    [Fact]
+    public void SetAll_WithTransform_AppliesTransform()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.4, 0.2, 0.1]);
+        var updated = color.SetAll(new Dictionary<string, object>
+        {
+            ["red"]  = (Func<double, double>)(v => v * 2),
+            ["blue"] = 0.0,
+        });
+        Assert.Equal(0.8, updated.Coords[0], precision: 10);
+        Assert.Equal(0.2, updated.Coords[1]);
+        Assert.Equal(0.0, updated.Coords[2]);
+    }
+
+    [Fact]
+    public void SetAll_InvalidValueType_Throws()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        Assert.Throws<ArgumentException>(() =>
+            color.SetAll(new Dictionary<string, object> { ["red"] = "invalid" }));
+    }
+
+    [Fact]
+    public void SetAll_IsImmutable()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        _ = color.SetAll(new Dictionary<string, object> { ["red"] = 0.5 });
+        Assert.Equal(1.0, color.Coords[0]);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Equals
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Equals_SameSpaceAndCoords_ReturnsTrue()
+    {
+        var a = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        var b = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        Assert.True(a.Equals(b));
+        Assert.True(a == b);
+    }
+
+    [Fact]
+    public void Equals_DifferentCoords_ReturnsFalse()
+    {
+        var a = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        var b = new Color(ColorSpace.Srgb, [0.0, 1.0, 0.0]);
+        Assert.False(a.Equals(b));
+        Assert.False(a == b);
+    }
+
+    [Fact]
+    public void Equals_DifferentSpaces_ReturnsFalse()
+    {
+        var a = new Color(ColorSpace.Srgb,  [1.0, 0.0, 0.0]);
+        var b = new Color(ColorSpace.Oklab, [1.0, 0.0, 0.0]);
+        Assert.False(a.Equals(b));
+    }
+
+    [Fact]
+    public void Equals_BothNoneCoord_ReturnsTrue()
+    {
+        var a = new Color(ColorSpace.Srgb, [double.NaN, 0.0, 0.0]);
+        var b = new Color(ColorSpace.Srgb, [double.NaN, 0.0, 0.0]);
+        Assert.True(a.Equals(b));
+    }
+
+    [Fact]
+    public void Equals_OneNoneCoord_ReturnsFalse()
+    {
+        var a = new Color(ColorSpace.Srgb, [double.NaN, 0.0, 0.0]);
+        var b = new Color(ColorSpace.Srgb, [1.0,        0.0, 0.0]);
+        Assert.False(a.Equals(b));
+    }
+
+    [Fact]
+    public void Equals_BothNoneAlpha_ReturnsTrue()
+    {
+        var a = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], double.NaN);
+        var b = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], double.NaN);
+        Assert.True(a.Equals(b));
+    }
+
+    [Fact]
+    public void Equals_DifferentAlpha_ReturnsFalse()
+    {
+        var a = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], 0.5);
+        var b = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], 1.0);
+        Assert.False(a.Equals(b));
+    }
+
+    [Fact]
+    public void Equals_Null_ReturnsFalse()
+    {
+        var a = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        Assert.False(a.Equals(null));
+    }
+
+    [Fact]
+    public void Equals_SameInstance_ReturnsTrue()
+    {
+        var a = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        Assert.True(a.Equals(a));
+    }
+
+    [Fact]
+    public void Equals_IgnoresParseMeta()
+    {
+        // Two colors constructed differently (CSS vs programmatic) but same values
+        var a = new Color("rgb(100% 0% 0%)");  // parsed, has ParseMeta
+        var b = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);  // no ParseMeta
+        Assert.True(a.Equals(b));
+    }
+
+    [Fact]
+    public void GetHashCode_EqualColors_SameHash()
+    {
+        var a = new Color(ColorSpace.Srgb, [0.5, 0.5, 0.5]);
+        var b = new Color(ColorSpace.Srgb, [0.5, 0.5, 0.5]);
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void GetHashCode_BothNoneCoord_SameHash()
+    {
+        var a = new Color(ColorSpace.Srgb, [double.NaN, 0.0, 0.0]);
+        var b = new Color(ColorSpace.Srgb, [double.NaN, 0.0, 0.0]);
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
     }
 }

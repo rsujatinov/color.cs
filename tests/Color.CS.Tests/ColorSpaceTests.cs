@@ -831,4 +831,76 @@ public sealed class ColorSpaceTests
         var result = a.To(b, [1.0, 2.0, 3.0]);
         Assert.Equal([(1 + 100) * 2.0, (2 + 100) * 2.0, (3 + 100) * 2.0], result);
     }
+
+    // ── ResolveCoord ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ResolveCoord_AbsoluteRef_ResolvesCorrectly()
+    {
+        var coord = ColorSpace.ResolveCoord("srgb.red");
+        Assert.Equal(ColorSpace.Srgb, coord.Space);
+        Assert.Equal("red", coord.Id);
+        Assert.Equal(0, coord.Index);
+    }
+
+    [Fact]
+    public void ResolveCoord_AbsoluteRef_SecondChannel()
+    {
+        var coord = ColorSpace.ResolveCoord("srgb.green");
+        Assert.Equal(1, coord.Index);
+        Assert.Equal("green", coord.Id);
+    }
+
+    [Fact]
+    public void ResolveCoord_AbsoluteRef_DifferentSpace()
+    {
+        var coord = ColorSpace.ResolveCoord("oklch.lightness");
+        Assert.Equal(ColorSpace.Oklch, coord.Space);
+        Assert.Equal("lightness", coord.Id);
+        Assert.Equal(0, coord.Index);
+    }
+
+    [Fact]
+    public void ResolveCoord_AbsoluteRef_ByDisplayName()
+    {
+        // "Lightness" is the display name for the "lightness" channel
+        var coord = ColorSpace.ResolveCoord("lch.Lightness");
+        Assert.Equal(ColorSpace.Lch, coord.Space);
+        Assert.Equal("lightness", coord.Id);
+        Assert.Equal(0, coord.Index);
+    }
+
+    [Fact]
+    public void ResolveCoord_RelativeRef_UsesWorkingSpace()
+    {
+        var coord = ColorSpace.ResolveCoord("lightness", ColorSpace.Lch);
+        Assert.Equal(ColorSpace.Lch, coord.Space);
+        Assert.Equal("lightness", coord.Id);
+        Assert.Equal(0, coord.Index);
+    }
+
+    [Fact]
+    public void ResolveCoord_RelativeRef_CaseInsensitive()
+    {
+        var coord = ColorSpace.ResolveCoord("LIGHTNESS", ColorSpace.Lch);
+        Assert.Equal("lightness", coord.Id);
+    }
+
+    [Fact]
+    public void ResolveCoord_NoSpace_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => ColorSpace.ResolveCoord("lightness"));
+    }
+
+    [Fact]
+    public void ResolveCoord_UnknownSpace_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => ColorSpace.ResolveCoord("nonexistent.l"));
+    }
+
+    [Fact]
+    public void ResolveCoord_UnknownCoord_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => ColorSpace.ResolveCoord("srgb.nonexistent"));
+    }
 }
