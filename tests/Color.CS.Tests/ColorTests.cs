@@ -332,6 +332,18 @@ public sealed class ColorTests
         Assert.Contains("\"alpha\":null", color.ToJson());
     }
 
+    [Fact]
+    public void Ported_ConstructJs_NewColor_Keyword()
+    {
+        // { name: "new Color(keyword)", args: ["red"], expect: { spaceId: "srgb", coords: [1, 0, 0], alpha: 1 } }
+        var color = new Color("red");
+        Assert.Equal("srgb", color.Space.Id);
+        Assert.Equal(1.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0, color.Alpha);
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // Ported from color.js — coords.js
     // https://github.com/color-js/color.js/blob/main/test/coords.js
@@ -1261,6 +1273,32 @@ public sealed class ColorTests
     {
         // angles not allowed in rgb()
         Assert.Throws<FormatException>(() => new Color("rgb(10deg 10 10)"));
+    }
+
+    // ── sRGB colors — named keywords ─────────────────────────────────────
+
+    [Fact]
+    public void Ported_ParseJs_ColorKeyword_Blue()
+    {
+        // { name: "Color keyword", args: "blue", expect: { spaceId: "srgb", coords: [0, 0, 1], alpha: 1 } }
+        var color = new Color("blue");
+        Assert.Equal("srgb", color.Space.Id);
+        Assert.Equal(0.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(1.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0, color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_ColorKeyword_Transparent()
+    {
+        // { name: "Color keyword", args: "transparent", expect: { spaceId: "srgb", coords: [0, 0, 0], alpha: 0 } }
+        var color = new Color("transparent");
+        Assert.Equal("srgb", color.Space.Id);
+        Assert.Equal(0.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.0, color.Coords[2], precision: 10);
+        Assert.Equal(0.0, color.Alpha);
     }
 
     // ── Lab and LCH colors ────────────────────────────────────────────────
@@ -2251,6 +2289,13 @@ public sealed class ColorTests
         => Assert.Equal("rgba(0, 128, 255, 1)", new Color("rgba(0, 128, 255, 1)").ToCss());
 
     [Fact]
+    public void Ported_ReserializeJs_CannotSerializeAsKeyword()
+        // { name: "Cannot serialize as keyword", arg: "red", expect: "rgb(100% 0% 0%)" }
+        // Named keywords are resolved to sRGB coordinates; they are re-serialized using
+        // the default sRGB format because no "keyword" serialization format exists.
+        => Assert.Equal("rgb(100% 0% 0%)", new Color("red").ToCss());
+
+    [Fact]
     public void Ported_ReserializeJs_FunctionalApi_NoParseMetaUsesDefaultFormat()
     {
         // Functional API: serialize(parse(str)) strips parseMeta.
@@ -2259,5 +2304,141 @@ public sealed class ColorTests
         // { arg: "#ff0000", expect: "rgb(100% 0% 0%)" }
         var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
         Assert.Equal("rgb(100% 0% 0%)", color.ToCss());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // ColorKeywords lookup table
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ColorKeywords_All_ContainsExpectedCount()
+    {
+        // 148 named colors + transparent = 149
+        Assert.Equal(149, ColorKeywords.All.Count);
+    }
+
+    [Theory]
+    [InlineData("red",   255,   0,   0)]
+    [InlineData("green",   0, 128,   0)]
+    [InlineData("blue",    0,   0, 255)]
+    [InlineData("white", 255, 255, 255)]
+    [InlineData("black",   0,   0,   0)]
+    [InlineData("rebeccapurple", 102, 51, 153)]
+    public void ColorKeywords_All_HasCorrectRgbValues(string name, byte r, byte g, byte b)
+    {
+        Assert.True(ColorKeywords.All.TryGetValue(name, out var rgb));
+        Assert.Equal(r, rgb.R);
+        Assert.Equal(g, rgb.G);
+        Assert.Equal(b, rgb.B);
+    }
+
+    [Fact]
+    public void ColorKeywords_All_IsCaseInsensitive()
+    {
+        Assert.True(ColorKeywords.All.TryGetValue("RED",  out var upper));
+        Assert.True(ColorKeywords.All.TryGetValue("Red",  out var title));
+        Assert.True(ColorKeywords.All.TryGetValue("rEd",  out var mixed));
+        Assert.Equal(upper, title);
+        Assert.Equal(upper, mixed);
+    }
+
+    [Fact]
+    public void ColorKeywords_TryGetColor_ReturnsCorrectSrgbCoords()
+    {
+        Assert.True(ColorKeywords.TryGetColor("red", out var color));
+        Assert.Equal(ColorSpace.Srgb, color.Space);
+        Assert.Equal(1.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0, color.Alpha);
+    }
+
+    [Fact]
+    public void ColorKeywords_TryGetColor_IsCaseInsensitive()
+    {
+        Assert.True(ColorKeywords.TryGetColor("RED", out var upper));
+        Assert.True(ColorKeywords.TryGetColor("Red", out var title));
+        Assert.Equal(upper.Coords[0], title.Coords[0], precision: 10);
+        Assert.Equal(upper.Coords[1], title.Coords[1], precision: 10);
+        Assert.Equal(upper.Coords[2], title.Coords[2], precision: 10);
+    }
+
+    [Fact]
+    public void ColorKeywords_TryGetColor_Transparent_HasZeroAlpha()
+    {
+        Assert.True(ColorKeywords.TryGetColor("transparent", out var color));
+        Assert.Equal(ColorSpace.Srgb, color.Space);
+        Assert.Equal(0.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.0, color.Coords[2], precision: 10);
+        Assert.Equal(0.0, color.Alpha);
+    }
+
+    [Fact]
+    public void ColorKeywords_TryGetColor_Transparent_IsCaseInsensitive()
+    {
+        Assert.True(ColorKeywords.TryGetColor("TRANSPARENT", out _));
+        Assert.True(ColorKeywords.TryGetColor("Transparent", out _));
+    }
+
+    [Fact]
+    public void ColorKeywords_TryGetColor_Currentcolor_ReturnsFalse()
+    {
+        Assert.False(ColorKeywords.TryGetColor("currentcolor", out _));
+        Assert.False(ColorKeywords.TryGetColor("CURRENTCOLOR", out _));
+        Assert.False(ColorKeywords.TryGetColor("currentColor", out _));
+    }
+
+    [Fact]
+    public void ColorKeywords_TryGetColor_UnknownKeyword_ReturnsFalse()
+        => Assert.False(ColorKeywords.TryGetColor("notacolor", out _));
+
+    [Fact]
+    public void Parse_NamedKeyword_Red_ResolvedToSrgb()
+    {
+        var color = new Color("red");
+        Assert.Equal(ColorSpace.Srgb, color.Space);
+        Assert.Equal(1.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0, color.Alpha);
+        Assert.Equal("keyword", color.ParseMeta?.FormatId);
+    }
+
+    [Fact]
+    public void Parse_NamedKeyword_Transparent_HasZeroAlpha()
+    {
+        var color = new Color("transparent");
+        Assert.Equal(ColorSpace.Srgb, color.Space);
+        Assert.Equal(0.0, color.Alpha);
+    }
+
+    [Fact]
+    public void Parse_NamedKeyword_IsCaseInsensitive()
+    {
+        var lower = new Color("red");
+        var upper = new Color("RED");
+        var mixed = new Color("rEd");
+        Assert.Equal(lower.Coords[0], upper.Coords[0], precision: 10);
+        Assert.Equal(lower.Coords[0], mixed.Coords[0], precision: 10);
+    }
+
+    [Fact]
+    public void Parse_NamedKeyword_Currentcolor_Fails()
+    {
+        var result = Color.TryParseCss("currentcolor");
+        Assert.IsType<ParseResult.Failure>(result);
+    }
+
+    [Theory]
+    [InlineData("cornflowerblue", 100, 149, 237)]
+    [InlineData("rebeccapurple",  102,  51, 153)]
+    [InlineData("darkslategrey",   47,  79,  79)]
+    public void Parse_NamedKeyword_VariousColors(string name, byte r, byte g, byte b)
+    {
+        var color = new Color(name);
+        Assert.Equal(r / 255.0, color.Coords[0], precision: 10);
+        Assert.Equal(g / 255.0, color.Coords[1], precision: 10);
+        Assert.Equal(b / 255.0, color.Coords[2], precision: 10);
     }
 }
