@@ -138,9 +138,10 @@ internal static class CssColorParser
             }
         }
 
-        // When rgb() is comma-separated with number coords, use the "rgb_number" format id
+        // When rgb() is comma-separated with all-number coords, use the "rgb_number" format id
         // so that round-trip serialisation reproduces commas and [0,255] numbers.
-        var formatId = funcName is "rgb" && hasCommas && coordTypes[0] == "<number>[0,255]"
+        var allNumberCoords = Array.TrueForAll(coordTypes, t => t == "<number>[0,255]");
+        var formatId = funcName is "rgb" && hasCommas && allNumberCoords
             ? "rgb_number"
             : funcName;
 

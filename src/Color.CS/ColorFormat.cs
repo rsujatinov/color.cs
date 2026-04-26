@@ -6,16 +6,24 @@ public sealed record ColorFormat
     /// <summary>Machine-readable format identifier (e.g. <c>"rgb"</c>, <c>"hsl"</c>, <c>"srgb"</c>).</summary>
     public required string Id { get; init; }
 
-    /// <summary>Human-readable display name. Defaults to <see cref="Id"/> when <c>null</c>.</summary>
+    /// <summary>
+    /// Optional CSS function name used in serialisation output when it differs from
+    /// <see cref="Id"/>. For example, the <c>"rgb_number"</c> format (legacy comma-separated
+    /// <c>rgb()</c> with <c>[0, 255]</c> numbers) sets <c>Name = "rgb"</c> so that the output
+    /// is still valid CSS <c>rgb(…)</c> while the unique ID allows round-trip format detection.
+    /// When <c>null</c>, <see cref="Id"/> is used as the CSS function name.
+    /// </summary>
     public string? Name { get; init; }
 
     /// <summary>Format type keyword (e.g. <c>"function"</c>, <c>"custom"</c>).</summary>
     public string? Type { get; init; }
 
     /// <summary>
-    /// Per-coordinate CSS type hints following the CSS Color 4 grammar
-    /// (e.g. <c>"&lt;number&gt; | &lt;angle&gt;"</c>, <c>"&lt;percentage&gt;"</c>).
-    /// Individual entries may be <c>null</c> when no special hint applies (raw number output).
+    /// Per-coordinate CSS type hints for the default serialisation output, one entry per channel.
+    /// Supported hints: <c>"&lt;percentage&gt;"</c> (scale by 100/rangeMax and append <c>%</c>),
+    /// <c>"&lt;number&gt;[0,255]"</c> (scale by 255), <c>"&lt;angle&gt;"</c> (append <c>deg</c>).
+    /// A <c>null</c> entry means no special hint: the coordinate is output as a plain number.
+    /// <c>null</c> for the entire list means all coordinates use plain number output.
     /// </summary>
     public IReadOnlyList<string?>? Coords { get; init; }
 

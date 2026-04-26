@@ -2193,9 +2193,10 @@ public sealed class ColorTests
     {
         // { name: "oklch negative values", args: ["oklch", [-0.1, -0.6, -50], 1],
         //   expect: "oklch(-10% -0.6 -50)" }
-        // NOTE: color.js uses gamut-aware mapping; our implementation does simple coord clamping.
-        // L has Range=[0,1] so it is clamped to 0. C and H have no Range (only RefRange) so they
-        // are preserved. Our output differs from color.js for this out-of-gamut case.
+        // NOTE: color.js uses gamut-aware mapping (CSS Gamut Mapping via chroma reduction) while
+        // our implementation uses simple coordinate clamping. L has Range=[0,1] so it is clamped
+        // to 0; C and H have no Range (only RefRange) so they are preserved.
+        // TODO: implement CSS gamut mapping algorithm to match color.js output exactly.
         var css = new Color(ColorSpace.Oklch, [-0.1, -0.6, -50]).ToCss();
         Assert.Equal("oklch(0% -0.6 -50)", css);
     }

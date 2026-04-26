@@ -228,8 +228,8 @@ public sealed record Color
     {
         if (string.Equals(format.Id, "hex", StringComparison.OrdinalIgnoreCase))
         {
-            // alpha override: false = suppress, true = force, null = auto
-            var includeAlpha = options.ForceAlpha ?? (double.IsNaN(alpha) || alpha < 1.0 ? true : (bool?)null);
+            // alpha override: false = suppress, true = force, null = auto (include when < 1 or NaN)
+            var includeAlpha = options.ForceAlpha ?? (double.IsNaN(alpha) || alpha < 1.0);
             return SerializeHex(coords, alpha, includeAlpha);
         }
 
