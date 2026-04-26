@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Text;
 
 namespace Color.CS;
 
@@ -98,8 +99,207 @@ public sealed record Color
     public string ToJson() =>
         $$"""{"spaceId":"{{Space.Id}}","coords":[{{string.Join(",", Coords.Select(static c => double.IsNaN(c) ? "null" : c.ToString("G", CultureInfo.InvariantCulture)))}}],"alpha":{{(double.IsNaN(Alpha) ? "null" : Alpha.ToString("G", CultureInfo.InvariantCulture))}}}""";
 
+    /// <summary>
+    /// Serialises this color to a CSS Color Level 4 string.
+    /// </summary>
+    /// <param name="options">Serialisation options; <c>null</c> uses defaults.</param>
+    public string ToCss(SerializeOptions? options = null)
+    {
+        options ??= new SerializeOptions();
+
+        // Resolve which format to use ──────────────────────────────────────
+        var formatIdHint = options.Format ?? ParseMeta?.FormatId;
+        ColorFormat? format = null;
+        var targetSpace = Space;
+
+        if (formatIdHint is not null)
+        {
+            // Look inside the current space first
+            format = Space.Formats.FirstOrDefault(f =>
+                string.Equals(f.Id, formatIdHint, StringComparison.OrdinalIgnoreCase));
+
+            // Fall back to a global search (format may belong to a different space)
+            if (format is null && ColorSpace.FindFormat(formatIdHint) is { } found)
+            {
+                format = found.Format;
+                targetSpace = found.Space;
+            }
+        }
+
+        // Default: first registered format for the space
+        if (format is null && Space.Formats.Count > 0)
+            format = Space.Formats[0];
+
+        // Convert coordinates to the target space when needed ────────────
+        var coords = ReferenceEquals(targetSpace, Space) || targetSpace.Equals(Space)
+            ? Coords.ToArray()
+            : Space.To(targetSpace, Coords.ToArray());
+
+        // Gamut clamping ──────────────────────────────────────────────────
+        if (options.InGamut)
+            ClampCoordsInPlace(targetSpace, coords);
+
+        // Dispatch to the right serialiser ────────────────────────────────
+        if (format is null)
+            return SerializeColorFunctionSyntax(targetSpace.Id, coords, Alpha, options.Precision);
+
+        if (string.Equals(format.Type, "custom", StringComparison.OrdinalIgnoreCase))
+            return SerializeCustomFormat(format, coords, Alpha, options.Precision);
+
+        return SerializeFunctionFormat(format, targetSpace, coords, Alpha, options.Precision);
+    }
+
+    /// <summary>
+    /// Returns a <see cref="DisplayColor"/> containing the CSS string representation and the
+    /// color as it will actually be rendered (gamut-clamped when
+    /// <see cref="SerializeOptions.InGamut"/> is <c>true</c>).
+    /// </summary>
+    /// <param name="options">Serialisation options; <c>null</c> uses defaults.</param>
+    public DisplayColor Display(SerializeOptions? options = null)
+    {
+        options ??= new SerializeOptions();
+
+        Color renderedColor;
+        if (options.InGamut)
+        {
+            var clampedCoords = Coords.ToArray();
+            ClampCoordsInPlace(Space, clampedCoords);
+            renderedColor = this with { Coords = ImmutableArray.Create(clampedCoords) };
+        }
+        else
+        {
+            renderedColor = this;
+        }
+
+        return new DisplayColor(ToCss(options), renderedColor);
+    }
+
     /// <inheritdoc/>
-    public override string ToString() => ToJson();
+    public override string ToString() => ToCss();
+
+    /// <summary>
+    /// Serialises this color to a CSS Color Level 4 string using the given options.
+    /// Equivalent to <see cref="ToCss(SerializeOptions?)"/>.
+    /// </summary>
+    public string ToString(SerializeOptions options) => ToCss(options);
+
+    // ── Private serialisation helpers ─────────────────────────────────────
+
+    private static void ClampCoordsInPlace(ColorSpace space, double[] coords)
+    {
+        var channels = space.Channels;
+        for (var i = 0; i < channels.Length && i < coords.Length; i++)
+        {
+            if (double.IsNaN(coords[i])) continue;
+            if (!space.Coords.TryGetValue(channels[i], out var meta)) continue;
+            if (meta.Type == CoordType.Angle) continue;
+            if (meta.Range is { } range)
+                coords[i] = Math.Clamp(coords[i], range.Min, range.Max);
+        }
+    }
+
+    private static string SerializeColorFunctionSyntax(
+        string spaceId, double[] coords, double alpha, int? precision)
+    {
+        var sb = new StringBuilder();
+        sb.Append("color(").Append(spaceId);
+        foreach (var c in coords)
+            sb.Append(' ').Append(SerializeCoordValue(c, null, precision));
+        AppendAlpha(sb, alpha, precision, useCommas: false);
+        sb.Append(')');
+        return sb.ToString();
+    }
+
+    private static string SerializeCustomFormat(
+        ColorFormat format, double[] coords, double alpha, int? precision)
+    {
+        if (string.Equals(format.Id, "hex", StringComparison.OrdinalIgnoreCase))
+            return SerializeHex(coords, alpha);
+
+        throw new NotSupportedException(
+            $"Custom format '{format.Id}' cannot be serialised — no serialize handler is registered.");
+    }
+
+    private static string SerializeHex(double[] coords, double alpha)
+    {
+        static int ToByte(double v) =>
+            (int)Math.Round(Math.Clamp(double.IsNaN(v) ? 0.0 : v, 0.0, 1.0) * 255.0);
+
+        var r = ToByte(coords.Length > 0 ? coords[0] : 0);
+        var g = ToByte(coords.Length > 1 ? coords[1] : 0);
+        var b = ToByte(coords.Length > 2 ? coords[2] : 0);
+
+        if (double.IsNaN(alpha) || alpha < 1.0)
+        {
+            var a = double.IsNaN(alpha) ? 0 : (int)Math.Round(alpha * 255.0);
+            return $"#{r:x2}{g:x2}{b:x2}{a:x2}";
+        }
+
+        return $"#{r:x2}{g:x2}{b:x2}";
+    }
+
+    private static string SerializeFunctionFormat(
+        ColorFormat format, ColorSpace space, double[] coords, double alpha, int? precision)
+    {
+        var funcName = format.UseColorFunction ? "color" : format.Id;
+        var useCommas = format.UseCommas;
+        var separator = useCommas ? ", " : " ";
+
+        var sb = new StringBuilder();
+        sb.Append(funcName).Append('(');
+
+        if (format.UseColorFunction)
+            sb.Append(space.Id);
+
+        for (var i = 0; i < coords.Length; i++)
+        {
+            if (i > 0 || format.UseColorFunction)
+                sb.Append(separator);
+            var hint = format.Coords is not null && i < format.Coords.Count
+                ? format.Coords[i] : null;
+            sb.Append(SerializeCoordValue(coords[i], hint, precision));
+        }
+
+        AppendAlpha(sb, alpha, precision, useCommas);
+        sb.Append(')');
+        return sb.ToString();
+    }
+
+    private static string SerializeCoordValue(double value, string? hint, int? precision)
+    {
+        if (double.IsNaN(value))
+            return "none";
+
+        if (hint is not null)
+        {
+            // <number>[0,255] | <percentage>  →  multiply by 255, output as number
+            if (hint.Contains("[0,255]", StringComparison.OrdinalIgnoreCase) ||
+                hint.Contains("[0, 255]", StringComparison.OrdinalIgnoreCase))
+                return FormatNumber(value * 255.0, precision);
+
+            // <percentage>  →  output the stored value followed by %
+            if (string.Equals(hint, "<percentage>", StringComparison.OrdinalIgnoreCase))
+                return FormatNumber(value, precision) + "%";
+        }
+
+        return FormatNumber(value, precision);
+    }
+
+    private static void AppendAlpha(
+        StringBuilder sb, double alpha, int? precision, bool useCommas)
+    {
+        // Omit alpha when it is exactly 1 and not NaN
+        if (!double.IsNaN(alpha) && alpha >= 1.0)
+            return;
+
+        var alphaStr = double.IsNaN(alpha) ? "none" : FormatNumber(alpha, precision);
+        sb.Append(useCommas ? $", {alphaStr}" : $" / {alphaStr}");
+    }
+
+    private static string FormatNumber(double value, int? precision) =>
+        precision is { } p
+            ? value.ToString($"G{p}", CultureInfo.InvariantCulture)
+            : value.ToString("G", CultureInfo.InvariantCulture);
 
     // ──────────────────────────────────────────────────────────────────────
     // Static factory helpers

@@ -30,4 +30,11 @@ public sealed record ColorFormat
     /// (e.g. <c>rgba(255, 0, 0, 0.5)</c>) rather than spaces and <c>/</c>.
     /// </summary>
     public bool UseCommas { get; init; }
+
+    /// <summary>
+    /// <c>true</c> when this format serializes using the CSS <c>color(spaceId …)</c> function
+    /// (e.g. <c>color(srgb 1 0 0)</c>).  <c>false</c> (the default) means the format's
+    /// <see cref="Id"/> is used as the function name directly (e.g. <c>rgb()</c>, <c>hsl()</c>).
+    /// </summary>
+    public bool UseColorFunction { get; init; }
 }

@@ -130,7 +130,7 @@ public class ColorSpace(ColorSpaceOptions options) : IEquatable<ColorSpace>
             },
             Formats =
             [
-                new() { Id = "srgb",  Type = "function" },
+                new() { Id = "srgb",  Type = "function", UseColorFunction = true },
                 new() { Id = "rgb",   Type = "function",
                     Coords = ["<number>[0,255] | <percentage>", "<number>[0,255] | <percentage>", "<number>[0,255] | <percentage>"] },
                 new() { Id = "rgba",  Type = "function", UseCommas = true,

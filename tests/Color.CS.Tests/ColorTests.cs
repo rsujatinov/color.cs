@@ -194,10 +194,10 @@ public sealed class ColorTests
     }
 
     [Fact]
-    public void Color_ToString_DelegatesToToJson()
+    public void Color_ToString_ProducesCssString()
     {
         var color = new Color(ColorSpace.Srgb, [0.5, 0.5, 0.5], 0.5);
-        Assert.Equal(color.ToJson(), color.ToString());
+        Assert.Equal("color(srgb 0.5 0.5 0.5 / 0.5)", color.ToString());
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -1710,5 +1710,303 @@ public sealed class ColorTests
     {
         // Parse metadata should capture "hex" for a hex string
         Assert.Equal("hex", new Color("#ff8000").ParseMeta?.FormatId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // CSS serialization — ToCss / ToString / Display
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── color() function syntax (non-legacy spaces) ───────────────────────
+
+    [Fact]
+    public void Serialize_Srgb_DefaultFormat_UsesColorFunction()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        Assert.Equal("color(srgb 1 0 0)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_Srgb_WithAlpha_AppendsDivAlpha()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], 0.5);
+        Assert.Equal("color(srgb 1 0 0 / 0.5)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_Srgb_AlphaOne_OmitsAlpha()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.5, 0.5, 0.5], 1.0);
+        Assert.Equal("color(srgb 0.5 0.5 0.5)", color.ToCss());
+    }
+
+    // ── none (NaN) serialization ──────────────────────────────────────────
+
+    [Fact]
+    public void Serialize_NoneCoord_OutputsNoneKeyword()
+    {
+        var color = new Color(ColorSpace.Srgb, [double.NaN, 0.0, 0.0]);
+        Assert.Contains("none", color.ToCss());
+        Assert.Equal("color(srgb none 0 0)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_NoneAlpha_OutputsNoneKeyword()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], double.NaN);
+        Assert.Equal("color(srgb 1 0 0 / none)", color.ToCss());
+    }
+
+    // ── legacy function syntax ────────────────────────────────────────────
+
+    [Fact]
+    public void Serialize_RoundTrip_Rgb_UsesRgbFunction()
+    {
+        // Parsed from rgb() → serializes back as rgb()
+        var color = new Color("rgb(255 0 0)");
+        Assert.Equal("rgb(255 0 0)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Rgba_UsesCommas()
+    {
+        // Parsed from rgba() with commas → serializes back with commas
+        var color = new Color("rgba(255, 0, 0, 0.5)");
+        Assert.Equal("rgba(255, 0, 0, 0.5)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Hsl_UsesHslFunction()
+    {
+        var color = new Color("hsl(180 100% 50%)");
+        Assert.Equal("hsl(180 100% 50%)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Hsl_WithAlpha()
+    {
+        var color = new Color("hsl(180 100% 50% / 0.5)");
+        Assert.Equal("hsl(180 100% 50% / 0.5)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Hwb()
+    {
+        var color = new Color("hwb(180 20% 30%)");
+        Assert.Equal("hwb(180 20% 30%)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Lab()
+    {
+        var color = new Color("lab(50 25 -25)");
+        Assert.Equal("lab(50 25 -25)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Lch()
+    {
+        var color = new Color("lch(50 30 180)");
+        Assert.Equal("lch(50 30 180)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Oklab()
+    {
+        var color = new Color("oklab(0.5 0.1 -0.1)");
+        Assert.Equal("oklab(0.5 0.1 -0.1)", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Oklch()
+    {
+        var color = new Color("oklch(0.5 0.1 180)");
+        Assert.Equal("oklch(0.5 0.1 180)", color.ToCss());
+    }
+
+    // ── hex format ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Serialize_RoundTrip_Hex6()
+    {
+        var color = new Color("#ff0000");
+        Assert.Equal("#ff0000", color.ToCss());
+    }
+
+    [Fact]
+    public void Serialize_RoundTrip_Hex_WithAlpha()
+    {
+        // #ff000080 → alpha = 128/255 → re-encoding may not match exactly
+        // but the format should be hex with alpha
+        var color = new Color("#ff000080");
+        var css = color.ToCss();
+        Assert.StartsWith("#", css);
+        Assert.Equal(9, css.Length); // #rrggbbaa
+    }
+
+    [Fact]
+    public void Serialize_FormatOption_Hex_FromNonHexParsed()
+    {
+        var color = new Color("color(srgb 1 0 0)");
+        var css = color.ToCss(new SerializeOptions { Format = "hex" });
+        Assert.Equal("#ff0000", css);
+    }
+
+    [Fact]
+    public void Serialize_FormatOption_Rgb_FromColorFunction()
+    {
+        var color = new Color("color(srgb 1 0 0)");
+        var css = color.ToCss(new SerializeOptions { Format = "rgb" });
+        Assert.Equal("rgb(255 0 0)", css);
+    }
+
+    [Fact]
+    public void Serialize_FormatOption_Hsl_FromSrgb()
+    {
+        // No space conversion, just format override
+        var color = new Color("hsl(180 100% 50%)");
+        var css = color.ToCss(new SerializeOptions { Format = "hsl" });
+        Assert.Equal("hsl(180 100% 50%)", css);
+    }
+
+    // ── precision option ──────────────────────────────────────────────────
+
+    [Fact]
+    public void Serialize_Precision_Default5_LimitsSignificantDigits()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.123456789, 0.0, 0.0]);
+        var css = color.ToCss();
+        Assert.Equal("color(srgb 0.12346 0 0)", css);
+    }
+
+    [Fact]
+    public void Serialize_Precision_Custom3()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.123456789, 0.5, 0.0]);
+        var css = color.ToCss(new SerializeOptions { Precision = 3 });
+        Assert.Equal("color(srgb 0.123 0.5 0)", css);
+    }
+
+    [Fact]
+    public void Serialize_Precision_Null_NoRounding()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.123456789, 0.0, 0.0]);
+        var css = color.ToCss(new SerializeOptions { Precision = null });
+        Assert.Contains("0.123456789", css);
+    }
+
+    // ── inGamut option ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Serialize_InGamut_True_ClampsOutOfGamutCoords()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.5, -0.2, 0.5]);
+        var css = color.ToCss(new SerializeOptions { InGamut = true });
+        Assert.Equal("color(srgb 1 0 0.5)", css);
+    }
+
+    [Fact]
+    public void Serialize_InGamut_False_PreservesOutOfGamutCoords()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.5, -0.2, 0.5]);
+        var css = color.ToCss(new SerializeOptions { InGamut = false });
+        Assert.Equal("color(srgb 1.5 -0.2 0.5)", css);
+    }
+
+    [Fact]
+    public void Serialize_InGamut_DoesNotClampAngleCoords()
+    {
+        // hue is an angle → not clamped even with inGamut = true
+        var color = new Color(ColorSpace.Hsl, [400.0, 50.0, 50.0]);
+        var css = color.ToCss(new SerializeOptions { InGamut = true });
+        Assert.Contains("400", css);
+    }
+
+    [Fact]
+    public void Serialize_InGamut_DoesNotClampNoneValues()
+    {
+        var color = new Color(ColorSpace.Srgb, [double.NaN, 0.0, 0.0]);
+        var css = color.ToCss(new SerializeOptions { InGamut = true });
+        Assert.Equal("color(srgb none 0 0)", css);
+    }
+
+    // ── round-trip fidelity via ParseMeta ────────────────────────────────
+
+    [Fact]
+    public void Serialize_ParseMeta_HexRoundTrip()
+    {
+        Assert.Equal("#ff0000", new Color("#ff0000").ToCss());
+    }
+
+    [Fact]
+    public void Serialize_ParseMeta_HexExpandsShortForm()
+    {
+        // #f00 is expanded internally to #ff0000 — short form re-serializes as 6-digit
+        Assert.Equal("#ff0000", new Color("#f00").ToCss());
+    }
+
+    [Fact]
+    public void Serialize_ParseMeta_LabRoundTrip()
+    {
+        Assert.Equal("lab(50 25 -25)", new Color("lab(50 25 -25)").ToCss());
+    }
+
+    [Fact]
+    public void Serialize_ParseMeta_OklchRoundTrip()
+    {
+        Assert.Equal("oklch(0.5 0.1 180)", new Color("oklch(0.5 0.1 180)").ToCss());
+    }
+
+    // ── Display method ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Display_ReturnsCssString()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0]);
+        var display = color.Display();
+        Assert.Equal("color(srgb 1 0 0)", display.Css);
+        Assert.Equal("color(srgb 1 0 0)", display.ToString());
+    }
+
+    [Fact]
+    public void Display_InGamut_ClampsRenderedColor()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.5, -0.2, 0.5]);
+        var display = color.Display();
+        Assert.Equal(1.0, display.Color.Coords[0]);
+        Assert.Equal(0.0, display.Color.Coords[1]);
+        Assert.Equal(0.5, display.Color.Coords[2]);
+    }
+
+    [Fact]
+    public void Display_InGamutFalse_OriginalColorPreserved()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.5, 0.0, 0.0]);
+        var display = color.Display(new SerializeOptions { InGamut = false });
+        Assert.Equal(1.5, display.Color.Coords[0]);
+    }
+
+    [Fact]
+    public void Display_NoneAlpha_IncludesNoneInOutput()
+    {
+        var color = new Color(ColorSpace.Srgb, [1.0, 0.0, 0.0], double.NaN);
+        var display = color.Display();
+        Assert.Contains("none", display.Css);
+    }
+
+    // ── ToString overload ─────────────────────────────────────────────────
+
+    [Fact]
+    public void ToString_WithOptions_RespectsPrecision()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.123456, 0.0, 0.0]);
+        var opts = new SerializeOptions { Precision = 2 };
+        Assert.Equal("color(srgb 0.12 0 0)", color.ToString(opts));
+    }
+
+    [Fact]
+    public void ToString_NoOptions_UsesPrecision5()
+    {
+        var color = new Color(ColorSpace.Srgb, [0.123456789, 0.0, 0.0]);
+        Assert.Equal("color(srgb 0.12346 0 0)", color.ToString());
     }
 }
