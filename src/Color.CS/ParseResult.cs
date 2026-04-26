@@ -24,9 +24,11 @@ public abstract record ParseResult
         ColorSpace space,
         ReadOnlySpan<double> coords,
         double alpha,
-        string? formatId = null) =>
+        string? formatId = null,
+        IReadOnlyList<string?>? coordTypes = null,
+        string? alphaType = null) =>
         new(space, ImmutableArray.Create(coords), alpha,
-            formatId is not null ? new ParseMeta(formatId) : null);
+            formatId is not null ? new ParseMeta(formatId, coordTypes, alphaType) : null);
 
     internal static Failure Fail(string error) => new(error);
 }

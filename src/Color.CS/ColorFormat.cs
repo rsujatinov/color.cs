@@ -15,9 +15,9 @@ public sealed record ColorFormat
     /// <summary>
     /// Per-coordinate CSS type hints following the CSS Color 4 grammar
     /// (e.g. <c>"&lt;number&gt; | &lt;angle&gt;"</c>, <c>"&lt;percentage&gt;"</c>).
-    /// <c>null</c> when no special hint is needed.
+    /// Individual entries may be <c>null</c> when no special hint applies (raw number output).
     /// </summary>
-    public IReadOnlyList<string>? Coords { get; init; }
+    public IReadOnlyList<string?>? Coords { get; init; }
 
     /// <summary>
     /// CSS type hint for the alpha channel (e.g. <c>"&lt;number&gt; | &lt;percentage&gt;"</c>).
@@ -37,4 +37,10 @@ public sealed record ColorFormat
     /// <see cref="Id"/> is used as the function name directly (e.g. <c>rgb()</c>, <c>hsl()</c>).
     /// </summary>
     public bool UseColorFunction { get; init; }
+
+    /// <summary>
+    /// <c>true</c> when this format always includes the alpha channel in its output, even when
+    /// alpha is exactly 1 (e.g. <c>rgba(…, 1)</c>, <c>hsla(…, 1)</c>).
+    /// </summary>
+    public bool ForceAlpha { get; init; }
 }
