@@ -83,6 +83,77 @@ public sealed record Color
                 $"Channel '{channelName}' not found in color space '{Space.Id}'.", nameof(channelName))
         };
 
+    /// <summary>
+    /// Returns all coordinates of this color converted to <paramref name="targetSpace"/>.
+    /// When <paramref name="targetSpace"/> equals <see cref="Space"/>, a copy of the current
+    /// coordinates is returned.
+    /// </summary>
+    public double[] GetAll(ColorSpace targetSpace) =>
+        Space.Equals(targetSpace) ? Coords.ToArray() : Space.To(targetSpace, Coords.ToArray());
+
+    /// <summary>
+    /// Returns the value of the coordinate identified by <paramref name="coordRef"/>.
+    /// <para>
+    /// <paramref name="coordRef"/> may be an absolute reference such as <c>"lch.l"</c>,
+    /// or a bare channel name such as <c>"l"</c> when the color is already in that space.
+    /// Passing <c>"alpha"</c> returns <see cref="Alpha"/>.
+    /// </para>
+    /// </summary>
+    public double Get(string coordRef)
+    {
+        if (string.Equals(coordRef, "alpha", StringComparison.OrdinalIgnoreCase))
+            return Alpha;
+
+        var (space, _, index) = ColorSpace.ResolveCoord(coordRef, Space);
+        return GetAll(space)[index];
+    }
+
+    /// <summary>
+    /// Returns a new <see cref="Color"/> with the coordinate identified by
+    /// <paramref name="coordRef"/> set to <paramref name="value"/>.
+    /// </summary>
+    public Color Set(string coordRef, double value)
+    {
+        var (space, _, index) = ColorSpace.ResolveCoord(coordRef, Space);
+        var coords = GetAll(space);
+        coords[index] = value;
+        var newCoords = space.Equals(Space) ? coords : space.To(Space, coords);
+        return this with { Coords = ImmutableArray.Create(newCoords) };
+    }
+
+    /// <summary>
+    /// Returns a new <see cref="Color"/> with the coordinate identified by
+    /// <paramref name="coordRef"/> replaced by <c>transform(currentValue)</c>.
+    /// </summary>
+    public Color Set(string coordRef, Func<double, double> transform) =>
+        Set(coordRef, transform(Get(coordRef)));
+
+    /// <summary>
+    /// Returns a new <see cref="Color"/> with multiple coordinates updated at once.
+    /// Each key in <paramref name="coords"/> is a coordinate reference (e.g. <c>"lch.l"</c>)
+    /// and each value is either a <see cref="double"/> or a <see cref="Func{T, TResult}"/>
+    /// of type <c>Func&lt;double, double&gt;</c>.
+    /// </summary>
+    /// <exception cref="ArgumentException">
+    /// A value in <paramref name="coords"/> is not a <see cref="double"/> or
+    /// <c>Func&lt;double, double&gt;</c>.
+    /// </exception>
+    public Color SetAll(Dictionary<string, object> coords)
+    {
+        var result = this;
+        foreach (var (key, value) in coords)
+        {
+            result = value switch
+            {
+                double d             => result.Set(key, d),
+                Func<double, double> f => result.Set(key, f),
+                _ => throw new ArgumentException(
+                    $"Value for '{key}' must be a double or Func<double, double>.", nameof(coords))
+            };
+        }
+        return result;
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // Mutation helpers
     // ──────────────────────────────────────────────────────────────────────
@@ -90,6 +161,44 @@ public sealed record Color
     /// <summary>Creates a copy of this color with updated coordinates and/or alpha.</summary>
     public Color With(ImmutableArray<double>? coords = null, double? alpha = null)
         => this with { Coords = coords ?? Coords, Alpha = alpha ?? Alpha };
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Equality
+    // ──────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="other"/> represents the same color as this instance:
+    /// same <see cref="Space"/>, same <see cref="Alpha"/>, and the same coordinate values.
+    /// <para>
+    /// <see cref="double.NaN"/> coordinates (representing CSS <c>none</c>) compare as equal to each
+    /// other, and <see cref="ParseMeta"/> is not considered.
+    /// </para>
+    /// </summary>
+    public bool Equals(Color? other)
+    {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+        if (!Space.Equals(other.Space)) return false;
+        if (!NoneAwareEquals(Alpha, other.Alpha)) return false;
+        if (Coords.Length != other.Coords.Length) return false;
+        for (var i = 0; i < Coords.Length; i++)
+            if (!NoneAwareEquals(Coords[i], other.Coords[i])) return false;
+        return true;
+    }
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+    {
+        var hc = new HashCode();
+        hc.Add(Space);
+        hc.Add(double.IsNaN(Alpha) ? double.NaN : Alpha);
+        foreach (var c in Coords)
+            hc.Add(double.IsNaN(c) ? double.NaN : c);
+        return hc.ToHashCode();
+    }
+
+    private static bool NoneAwareEquals(double a, double b) =>
+        (double.IsNaN(a) && double.IsNaN(b)) || a == b;
 
     // ──────────────────────────────────────────────────────────────────────
     // Serialisation
