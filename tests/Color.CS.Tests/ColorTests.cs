@@ -332,6 +332,18 @@ public sealed class ColorTests
         Assert.Contains("\"alpha\":null", color.ToJson());
     }
 
+    [Fact]
+    public void Ported_ConstructJs_NewColor_Keyword()
+    {
+        // { name: "new Color(keyword)", args: ["red"], expect: { spaceId: "srgb", coords: [1, 0, 0], alpha: 1 } }
+        var color = new Color("red");
+        Assert.Equal("srgb", color.Space.Id);
+        Assert.Equal(1.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0, color.Alpha);
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // Ported from color.js — coords.js
     // https://github.com/color-js/color.js/blob/main/test/coords.js
@@ -1261,6 +1273,32 @@ public sealed class ColorTests
     {
         // angles not allowed in rgb()
         Assert.Throws<FormatException>(() => new Color("rgb(10deg 10 10)"));
+    }
+
+    // ── sRGB colors — named keywords ─────────────────────────────────────
+
+    [Fact]
+    public void Ported_ParseJs_ColorKeyword_Blue()
+    {
+        // { name: "Color keyword", args: "blue", expect: { spaceId: "srgb", coords: [0, 0, 1], alpha: 1 } }
+        var color = new Color("blue");
+        Assert.Equal("srgb", color.Space.Id);
+        Assert.Equal(0.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(1.0, color.Coords[2], precision: 10);
+        Assert.Equal(1.0, color.Alpha);
+    }
+
+    [Fact]
+    public void Ported_ParseJs_ColorKeyword_Transparent()
+    {
+        // { name: "Color keyword", args: "transparent", expect: { spaceId: "srgb", coords: [0, 0, 0], alpha: 0 } }
+        var color = new Color("transparent");
+        Assert.Equal("srgb", color.Space.Id);
+        Assert.Equal(0.0, color.Coords[0], precision: 10);
+        Assert.Equal(0.0, color.Coords[1], precision: 10);
+        Assert.Equal(0.0, color.Coords[2], precision: 10);
+        Assert.Equal(0.0, color.Alpha);
     }
 
     // ── Lab and LCH colors ────────────────────────────────────────────────
@@ -2249,6 +2287,13 @@ public sealed class ColorTests
     public void Ported_ReserializeJs_LegacyRgbaWithCommas()
         // { arg: "rgba(0, 128, 255, 1)", expect: "rgba(0, 128, 255, 1)" }
         => Assert.Equal("rgba(0, 128, 255, 1)", new Color("rgba(0, 128, 255, 1)").ToCss());
+
+    [Fact]
+    public void Ported_ReserializeJs_CannotSerializeAsKeyword()
+        // { name: "Cannot serialize as keyword", arg: "red", expect: "rgb(100% 0% 0%)" }
+        // Named keywords are resolved to sRGB coordinates; they are re-serialized using
+        // the default sRGB format because no "keyword" serialization format exists.
+        => Assert.Equal("rgb(100% 0% 0%)", new Color("red").ToCss());
 
     [Fact]
     public void Ported_ReserializeJs_FunctionalApi_NoParseMetaUsesDefaultFormat()
